@@ -9,7 +9,7 @@ import { BlockedApp, ZenProfile, Schedule } from './models'
 // Determine which adapter to use
 // SQLiteAdapter requires native JSI bindings (not available in Expo Go by default)
 // LokiJSAdapter is used for Web and Expo Go testing
-const adapter = Platform.OS === 'web' || !Boolean((global as any).nativeCallSyncHook)
+const adapter = Platform.OS === 'web'
     ? new LokiJSAdapter({
         schema,
         useWebWorker: false,
