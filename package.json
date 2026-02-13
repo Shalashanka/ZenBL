@@ -1,0 +1,26 @@
+{
+  "name": "zenbl",
+  "version": "1.0.0",
+  "main": "index.ts",
+  "scripts": {
+    "start": "expo start",
+    "android": "expo run:android",
+    "ios": "expo run:ios",
+    "web": "expo start --web"
+  },
+  "dependencies": {
+    "@nozbe/watermelondb": "^0.28.0",
+    "expo": "~54.0.33",
+    "expo-dev-client": "~6.0.20",
+    "expo-status-bar": "~3.0.9",
+    "lokijs": "^1.5.12",
+    "react": "19.1.0",
+    "react-native": "0.81.5"
+  },
+  "devDependencies": {
+    "@babel/plugin-proposal-decorators": "^7.29.0",
+    "@types/react": "~19.1.0",
+    "typescript": "~5.9.2"
+  },
+  "private": true
+}
