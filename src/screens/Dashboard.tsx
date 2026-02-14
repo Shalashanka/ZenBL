@@ -13,9 +13,18 @@ import Animated, {
     FadeOut
 } from 'react-native-reanimated';
 
-export const Dashboard = ({ onOpenAppList }: { onOpenAppList: () => void }) => {
+import { ScheduleManager } from '../services/ScheduleManager';
+// Screens handled by App.tsx now
+
+interface DashboardProps {
+    onOpenAppList: () => void;
+    onOpenSchedules: () => void;
+}
+
+export const Dashboard = ({ onOpenAppList, onOpenSchedules }: DashboardProps) => {
     const { isServiceEnabled, openSettings } = useAccessibilityPermission();
     const [hasOverlayPermission, setHasOverlayPermission] = React.useState(false);
+    // Local nav state removed
 
     // Zen Store
     const {
@@ -46,22 +55,14 @@ export const Dashboard = ({ onOpenAppList }: { onOpenAppList: () => void }) => {
         // Pre-fetch apps in background
         AppScanner.loadApps();
 
+        // Start Schedule Manager
+        ScheduleManager.start();
+
         const interval = setInterval(checkOverlay, 2000);
         return () => clearInterval(interval);
     }, []);
 
-    // Timer Logic
-    useEffect(() => {
-        let timer: NodeJS.Timeout;
-        if (isZenModeActive && remainingTime > 0) {
-            timer = setInterval(() => {
-                decrementTime();
-            }, 1000);
-        } else if (remainingTime === 0 && isZenModeActive) {
-            exitZenMode();
-        }
-        return () => clearInterval(timer);
-    }, [isZenModeActive, remainingTime]);
+    // Timer Logic moved to GlobalZenOverlay
 
     const startZenMode = () => {
         setZenModeActive(true);
@@ -120,10 +121,23 @@ export const Dashboard = ({ onOpenAppList }: { onOpenAppList: () => void }) => {
                 </View>
             </View>
 
-            <TouchableOpacity style={[styles.card, styles.menuItem]} onPress={onOpenAppList}>
-                <Text style={styles.menuText}>Manage Block List</Text>
-                <Text style={styles.chevron}>›</Text>
-            </TouchableOpacity>
+            <View style={styles.menuContainer}>
+                <TouchableOpacity style={[styles.card, styles.menuItem]} onPress={() => {
+                    console.log('🔘 Manage Block List Pressed');
+                    onOpenAppList();
+                }}>
+                    <Text style={styles.menuText}>Manage Block List</Text>
+                    <Text style={styles.chevron}>›</Text>
+                </TouchableOpacity>
+
+                <TouchableOpacity style={[styles.card, styles.menuItem]} onPress={() => {
+                    console.log('🔘 Manage Schedules Pressed');
+                    onOpenSchedules();
+                }}>
+                    <Text style={styles.menuText}>Manage Schedules</Text>
+                    <Text style={styles.chevron}>›</Text>
+                </TouchableOpacity>
+            </View>
 
             <View style={styles.spacer} />
 
@@ -131,18 +145,6 @@ export const Dashboard = ({ onOpenAppList }: { onOpenAppList: () => void }) => {
                 <Text style={styles.activateButtonText}>ACTIVATE ZEN MODE</Text>
             </TouchableOpacity>
 
-            {/* Reanimated Full Screen Overlay */}
-            {isZenModeActive && (
-                <Animated.View style={[styles.zenOverlay, overlayStyle]}>
-                    <Text style={styles.zenTitle}>Zen Mode</Text>
-                    <Text style={styles.zenTimer}>{formatTime(remainingTime)}</Text>
-                    <Text style={styles.zenQuote}>"Quiet the mind, and the soul will speak."</Text>
-
-                    <TouchableOpacity style={styles.exitButton} onPress={exitZenMode}>
-                        <Text style={styles.exitButtonText}>End Session</Text>
-                    </TouchableOpacity>
-                </Animated.View>
-            )}
         </View>
     );
 };
@@ -153,6 +155,10 @@ const styles = StyleSheet.create({
         backgroundColor: '#F5F5F7',
         padding: 20,
         justifyContent: 'center',
+    },
+    menuContainer: {
+        width: '100%',
+        gap: 12, // Gap for modern spacing, or use margins if gap not supported in this RN version (0.71+ supports it)
     },
     header: {
         marginBottom: 30,
@@ -260,52 +266,6 @@ const styles = StyleSheet.create({
         letterSpacing: 1,
     },
 
-    // Zen Overlay Styles
-    zenOverlay: {
-        position: 'absolute',
-        top: 0,
-        left: 0,
-        right: 0,
-        bottom: 0,
-        backgroundColor: '#0F2027', // The Deep Zen Blue
-        justifyContent: 'center',
-        alignItems: 'center',
-        zIndex: 1000, // Cover everything
-    },
-    zenTitle: {
-        fontSize: 32,
-        fontWeight: '300',
-        color: '#FFFFFF',
-        marginBottom: 20,
-        letterSpacing: 2,
-    },
-    zenTimer: {
-        fontSize: 80,
-        fontWeight: '200',
-        color: '#FFFFFF',
-        fontVariant: ['tabular-nums'],
-        marginBottom: 40,
-    },
-    zenQuote: {
-        fontSize: 18,
-        color: 'rgba(255,255,255,0.7)',
-        textAlign: 'center',
-        fontStyle: 'italic',
-        maxWidth: '80%',
-        marginBottom: 60,
-    },
-    exitButton: {
-        paddingVertical: 15,
-        paddingHorizontal: 40,
-        borderWidth: 1,
-        borderColor: 'rgba(255,255,255,0.3)',
-        borderRadius: 30,
-    },
-    exitButtonText: {
-        color: '#FFFFFF',
-        fontSize: 16,
-        fontWeight: '500',
-    },
     spacer: {
         height: 20,
     },

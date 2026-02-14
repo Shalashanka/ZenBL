@@ -17,6 +17,7 @@ import { Q } from '@nozbe/watermelondb';
 import { useZenStore } from '../store/zenStore';
 
 export const AppList = ({ onClose }: { onClose: () => void }) => {
+    console.log('📱 AppList Component Rendered');
     const { installedApps, setInstalledApps } = useZenStore();
     const [apps, setApps] = useState<AppInfo[]>(installedApps);
     const [searchText, setSearchText] = useState('');

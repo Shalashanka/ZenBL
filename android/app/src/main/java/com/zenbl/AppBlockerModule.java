@@ -179,6 +179,18 @@ public class AppBlockerModule extends ReactContextBaseJavaModule {
         }
     }
 
+    @ReactMethod
+    public void setBlockEnabled(boolean enabled) {
+        try {
+            SharedPreferences prefs = reactContext.getSharedPreferences("ZenBlockedApps", Context.MODE_PRIVATE);
+            SharedPreferences.Editor editor = prefs.edit();
+            editor.putBoolean("is_zen_mode_active", enabled);
+            editor.apply();
+        } catch (Exception e) {
+            e.printStackTrace();
+        }
+    }
+
     private String convertIconToBase64(Drawable drawable) {
         Bitmap bitmap;
         if (drawable instanceof BitmapDrawable) {

@@ -12,6 +12,7 @@ export default class Schedule extends Model {
     @field('day_of_week') dayOfWeek!: number
     @field('start_time') startTime!: string
     @field('end_time') endTime!: string
+    @field('is_enabled') isEnabled!: boolean
     @readonly @date('created_at') createdAt!: number
     @readonly @date('updated_at') updatedAt!: number
 

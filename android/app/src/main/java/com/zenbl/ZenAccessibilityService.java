@@ -29,12 +29,20 @@ public class ZenAccessibilityService extends AccessibilityService {
     @Override
     public void onAccessibilityEvent(AccessibilityEvent event) {
         if (event.getEventType() == AccessibilityEvent.TYPE_WINDOW_STATE_CHANGED) {
-            String packageName = event.getPackageName() != null ? event.getPackageName().toString() : "unknown";
-
             SharedPreferences prefs = getSharedPreferences("ZenBlockedApps", Context.MODE_PRIVATE);
+            boolean isZenModeActive = prefs.getBoolean("is_zen_mode_active", false);
+
+            if (!isZenModeActive) {
+                return;
+            }
+
+            String packageName = event.getPackageName() != null ? event.getPackageName().toString() : "unknown";
             Set<String> blockedPackages = prefs.getStringSet("blocked_packages", new HashSet<>());
 
-            Log.d(TAG, "Active Window: " + packageName + " | Blocked List Size: " + blockedPackages.size());
+            Log.d(TAG, "==== ZEN DEBUG ====");
+            Log.d(TAG, "Active Window: " + packageName);
+            Log.d(TAG, "Blocked List (" + blockedPackages.size() + "): " + blockedPackages.toString());
+            Log.d(TAG, "===================");
 
             if (blockedPackages.contains(packageName)) {
                 Log.d(TAG, "🔴 MATCH FOUND! Blocking " + packageName);
@@ -143,9 +151,8 @@ public class ZenAccessibilityService extends AccessibilityService {
         try {
             // Flute Only
             MediaPlayer flute = MediaPlayer.create(this, R.raw.flute);
-            float volume = audioManager.getStreamVolume(AudioManager.STREAM_MUSIC) / 15f;
             if (flute != null) {
-                flute.setVolume(volume, volume);
+                flute.setVolume(0.04f, 0.04f); // 40% Volume
                 flute.start();
                 flute.setOnCompletionListener(MediaPlayer::release);
                 flute.setOnErrorListener((mp, what, extra) -> {

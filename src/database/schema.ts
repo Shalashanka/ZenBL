@@ -31,6 +31,7 @@ export default appSchema({
                 { name: 'day_of_week', type: 'number' }, // 0-6 (Sun-Sat)
                 { name: 'start_time', type: 'string' }, // HH:mm
                 { name: 'end_time', type: 'string' },   // HH:mm
+                { name: 'is_enabled', type: 'boolean' },
                 { name: 'created_at', type: 'number' },
                 { name: 'updated_at', type: 'number' },
             ]

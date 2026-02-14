@@ -1,11 +1,16 @@
 import React, { useState, useEffect } from 'react';
+import { View } from 'react-native';
 import { Linking } from 'react-native';
 import { Dashboard } from './src/screens/Dashboard';
 import { AppList } from './src/screens/AppList';
 import { ZenBlockScreen } from './src/screens/ZenBlockScreen';
+import { ScheduleScreen } from './src/screens/ScheduleScreen';
+import { GlobalZenOverlay } from './src/components/GlobalZenOverlay';
+
+type Screen = 'dashboard' | 'appList' | 'schedules';
 
 export default function App() {
-  const [showAppList, setShowAppList] = useState(false);
+  const [currentScreen, setCurrentScreen] = useState<Screen>('dashboard');
   const [isZenMode, setIsZenMode] = useState(false);
 
   useEffect(() => {
@@ -15,14 +20,12 @@ export default function App() {
       }
     };
 
-    // Check initial URL
     Linking.getInitialURL().then((url) => {
       if (url && url.includes('block')) {
         setIsZenMode(true);
       }
     });
 
-    // Listen for incoming links
     const subscription = Linking.addEventListener('url', handleDeepLink);
 
     return () => {
@@ -34,11 +37,25 @@ export default function App() {
     return <ZenBlockScreen onExit={() => setIsZenMode(false)} />;
   }
 
-  if (showAppList) {
-    return <AppList onClose={() => setShowAppList(false)} />;
-  }
+  const renderScreen = () => {
+    if (currentScreen === 'appList') {
+      return <AppList onClose={() => setCurrentScreen('dashboard')} />;
+    }
+    if (currentScreen === 'schedules') {
+      return <ScheduleScreen onClose={() => setCurrentScreen('dashboard')} />;
+    }
+    return (
+      <Dashboard
+        onOpenAppList={() => setCurrentScreen('appList')}
+        onOpenSchedules={() => setCurrentScreen('schedules')}
+      />
+    );
+  };
 
   return (
-    <Dashboard onOpenAppList={() => setShowAppList(true)} />
+    <View style={{ flex: 1 }}>
+      {renderScreen()}
+      <GlobalZenOverlay />
+    </View>
   );
 }
