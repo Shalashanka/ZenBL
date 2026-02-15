@@ -1,7 +1,5 @@
 import React, { useEffect, useState } from 'react';
-import { View, Text, StyleSheet, TouchableOpacity, BackHandler, NativeModules } from 'react-native';
-
-const { AppBlocker } = NativeModules;
+import { View, Text, StyleSheet, TouchableOpacity, BackHandler } from 'react-native';
 
 export const ZenBlockScreen = ({ onExit }: { onExit: () => void }) => {
     const [quote, setQuote] = useState("Time to find your Zen.");

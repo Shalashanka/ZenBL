@@ -1,7 +1,7 @@
 import { appSchema, tableSchema } from '@nozbe/watermelondb'
 
 export default appSchema({
-    version: 1,
+    version: 2,
     tables: [
         tableSchema({
             name: 'blocked_apps',
@@ -32,6 +32,9 @@ export default appSchema({
                 { name: 'start_time', type: 'string' }, // HH:mm
                 { name: 'end_time', type: 'string' },   // HH:mm
                 { name: 'is_enabled', type: 'boolean' },
+                { name: 'name', type: 'string', isOptional: true },
+                { name: 'recurrence_type', type: 'string', isOptional: true }, // 'daily', 'weekly', etc.
+                { name: 'specific_blocked_apps', type: 'string', isOptional: true }, // JSON string of package names
                 { name: 'created_at', type: 'number' },
                 { name: 'updated_at', type: 'number' },
             ]

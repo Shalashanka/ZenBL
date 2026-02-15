@@ -1,61 +1,158 @@
 import { create } from 'zustand';
+import NativeZenEngine from '../../specs/NativeZenEngine';
+
+const Engine = NativeZenEngine;
 
 interface ZenState {
     isZenModeActive: boolean;
     zenDuration: number; // in seconds
     remainingTime: number; // in seconds
-    zenEndTime: number | null; // Timestamp in ms
+    zenEndTime: number | null;
+    fortressModeEnabled: boolean;
+    scheduleName: string;
+    // Data
+    schedules: any[];
+    blockedApps: any[];
+
+    // Actions
     setZenModeActive: (active: boolean) => void;
     setZenDuration: (duration: number) => void;
     setRemainingTime: (time: number) => void;
+    setFortressModeEnabled: (enabled: boolean) => void;
+    setInstalledApps: (apps: any[]) => void;
     decrementTime: () => void;
 
-    installedApps: any[]; // Using any for simplicity in this step, ideally AppInfo interface
-    setInstalledApps: (apps: any[]) => void;
+    // Engine-powered actions
+    startZenMode: (durationSec: number, scheduleName: string, fortress: boolean) => void;
+    stopZenMode: () => void;
+    pollEngineStatus: () => Promise<void>;
+
+    // CRUD
+    fetchSchedules: () => Promise<void>;
+    saveSchedule: (schedule: any) => Promise<void>;
+    deleteSchedule: (id: number) => Promise<void>;
+    fetchBlockedApps: () => Promise<void>;
+    setBlockedApps: (apps: any[]) => Promise<void>;
 }
 
-export const useZenStore = create<ZenState>((set, get) => ({
+export const useZenStore = create<ZenState>()((set, get) => ({
     isZenModeActive: false,
-    zenDuration: 20 * 60,
-    remainingTime: 20 * 60,
-    zenEndTime: null, // New field
-
-    setZenModeActive: (active) => {
-        set({ isZenModeActive: active });
-        if (!active) {
-            set({ zenEndTime: null });
-        }
-    },
-
-    setZenDuration: (duration) => {
-        const now = Date.now();
-        const endTime = now + (duration * 1000);
-        set({
-            zenDuration: duration,
-            remainingTime: duration,
-            zenEndTime: endTime
-        });
-    },
-
-    setRemainingTime: (time) => set({ remainingTime: time }),
-
-    decrementTime: () => set((state) => {
-        if (!state.zenEndTime) {
-            // Fallback if no end time set (manual start without duration?)
-            return { remainingTime: Math.max(0, state.remainingTime - 1) };
-        }
-
-        const now = Date.now();
-        const remaining = Math.ceil((state.zenEndTime - now) / 1000);
-
-        if (remaining <= 0) {
-            return { remainingTime: 0, isZenModeActive: false, zenEndTime: null };
-        }
-
-        return { remainingTime: remaining };
-    }),
-
-    // App Cache
+    zenDuration: 1500, // 25 min default
+    remainingTime: 1500,
+    zenEndTime: null,
+    fortressModeEnabled: false,
+    scheduleName: '',
     installedApps: [],
+    schedules: [],
+    blockedApps: [],
+
+    setZenModeActive: (active) => set({ isZenModeActive: active }),
+    setZenDuration: (duration) => set({ zenDuration: duration, remainingTime: duration }),
+    setRemainingTime: (time) => set({ remainingTime: time }),
+    setFortressModeEnabled: (enabled) => set({ fortressModeEnabled: enabled }),
     setInstalledApps: (apps) => set({ installedApps: apps }),
+    decrementTime: () => {
+        const { remainingTime } = get();
+        if (remainingTime > 0) {
+            set({ remainingTime: remainingTime - 1 });
+        }
+    },
+
+    startZenMode: (durationSec, scheduleName, fortress) => {
+        const endTime = Date.now() + durationSec * 1000;
+        set({
+            isZenModeActive: true,
+            zenEndTime: endTime,
+            remainingTime: durationSec,
+            fortressModeEnabled: fortress,
+            scheduleName: scheduleName,
+        });
+
+        if (Engine) {
+            Engine.triggerManualZen(durationSec, fortress);
+        } else {
+            console.warn('[ZenStore] ZenEngine Native Module not found');
+        }
+
+        console.log(`[ZenStore] Starting Zen: ${scheduleName}, Fortress: ${fortress}`);
+    },
+
+    stopZenMode: () => {
+        set({
+            isZenModeActive: false,
+            zenEndTime: null,
+            fortressModeEnabled: false,
+            scheduleName: '',
+        });
+        if (Engine) {
+            Engine.stopZen();
+        }
+    },
+
+    pollEngineStatus: async () => {
+        if (!Engine) return;
+        try {
+            const status = await Engine.getEngineStatus();
+            set({
+                isZenModeActive: status.isActive,
+                remainingTime: status.remainingSeconds,
+                scheduleName: status.scheduleName,
+                fortressModeEnabled: status.isFortress,
+            });
+        } catch (e) {
+            console.warn('[ZenStore] pollEngineStatus failed', e);
+        }
+    },
+
+    fetchSchedules: async () => {
+        if (!Engine) return;
+        try {
+            const list = await Engine.fetchSchedules();
+            set({ schedules: list });
+        } catch (e) {
+            console.error('[ZenStore] fetchSchedules failed', e);
+        }
+    },
+
+    saveSchedule: async (schedule) => {
+        if (!Engine) return;
+        try {
+            await Engine.saveSchedule(JSON.stringify(schedule));
+            await get().fetchSchedules(); // Refresh list
+        } catch (e) {
+            console.error('[ZenStore] saveSchedule failed', e);
+            throw e;
+        }
+    },
+
+    deleteSchedule: async (id) => {
+        if (!Engine) return;
+        try {
+            await Engine.deleteSchedule(id);
+            await get().fetchSchedules(); // Refresh list
+        } catch (e) {
+            console.error('[ZenStore] deleteSchedule failed', e);
+            throw e;
+        }
+    },
+
+    fetchBlockedApps: async () => {
+        if (!Engine) return;
+        try {
+            const list = await Engine.fetchBlockedApps();
+            set({ blockedApps: list });
+        } catch (e) {
+            console.error('[ZenStore] fetchBlockedApps failed', e);
+        }
+    },
+
+    setBlockedApps: async (apps) => {
+        if (!Engine) return;
+        try {
+            Engine.setBlockedApps(JSON.stringify(apps));
+            set({ blockedApps: apps });
+        } catch (e) {
+            console.error('[ZenStore] setBlockedApps failed', e);
+        }
+    },
 }));

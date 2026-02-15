@@ -1,18 +1,19 @@
 import { useState, useEffect, useCallback } from 'react';
-import { NativeModules, AppState, AppStateStatus } from 'react-native';
+import { AppState, AppStateStatus } from 'react-native';
+import NativeZenEngine from '../../specs/NativeZenEngine';
 
-const { AppBlocker } = NativeModules;
+const Engine = NativeZenEngine;
 
 export const useAccessibilityPermission = () => {
     const [isServiceEnabled, setIsServiceEnabled] = useState(false);
 
     const checkPermission = useCallback(async () => {
         try {
-            if (AppBlocker?.isServiceEnabled) {
-                const enabled = await AppBlocker.isServiceEnabled();
+            if (Engine?.isServiceEnabled) {
+                const enabled = await Engine.isServiceEnabled();
                 setIsServiceEnabled(enabled);
             } else {
-                console.warn('AppBlocker Native Module not found');
+                console.warn('ZenEngine Native Module not found');
             }
         } catch (error) {
             console.error('Failed to check accessibility service status:', error);
@@ -20,16 +21,15 @@ export const useAccessibilityPermission = () => {
     }, []);
 
     const openSettings = useCallback(() => {
-        if (AppBlocker?.openAccessibilitySettings) {
-            AppBlocker.openAccessibilitySettings();
+        if (Engine?.openAccessibilitySettings) {
+            Engine.openAccessibilitySettings();
         } else {
-            console.warn('AppBlocker Native Module not found');
+            console.warn('ZenEngine Native Module not found');
         }
     }, []);
 
     useEffect(() => {
         checkPermission();
-        // Retry logic: sometimes native module is not ready or returns false initially
         const timer = setTimeout(checkPermission, 1000);
 
         const subscription = AppState.addEventListener('change', (nextAppState: AppStateStatus) => {

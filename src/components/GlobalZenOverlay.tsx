@@ -4,7 +4,7 @@ import Animated, { useSharedValue, useAnimatedStyle, withTiming } from 'react-na
 import { useZenStore } from '../store/zenStore';
 
 export const GlobalZenOverlay = () => {
-    const { isZenModeActive, remainingTime, setZenModeActive, decrementTime } = useZenStore();
+    const { isZenModeActive, remainingTime, stopZenMode, decrementTime, fortressModeEnabled } = useZenStore();
     const overlayOpacity = useSharedValue(0);
 
     const overlayStyle = useAnimatedStyle(() => {
@@ -45,9 +45,15 @@ export const GlobalZenOverlay = () => {
             <Text style={styles.zenTimer}>{formatTime(remainingTime)}</Text>
             <Text style={styles.zenQuote}>"Quiet the mind, and the soul will speak."</Text>
 
-            <TouchableOpacity style={styles.exitButton} onPress={() => setZenModeActive(false)}>
-                <Text style={styles.exitButtonText}>End Session</Text>
-            </TouchableOpacity>
+            {!fortressModeEnabled && (
+                <TouchableOpacity style={styles.exitButton} onPress={() => stopZenMode()}>
+                    <Text style={styles.exitButtonText}>End Session</Text>
+                </TouchableOpacity>
+            )}
+
+            {fortressModeEnabled && (
+                <Text style={[styles.zenQuote, { marginTop: 20, fontSize: 14 }]}>🔒 Fortress Mode Active</Text>
+            )}
         </Animated.View>
     );
 };

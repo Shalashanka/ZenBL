@@ -11,42 +11,28 @@ import {
     TouchableOpacity
 } from 'react-native';
 import { AppScanner, AppInfo } from '../services/AppScanner';
-import database from '../database';
-import { BlockedApp } from '../database/models';
-import { Q } from '@nozbe/watermelondb';
 import { useZenStore } from '../store/zenStore';
 
 export const AppList = ({ onClose }: { onClose: () => void }) => {
     console.log('📱 AppList Component Rendered');
-    const { installedApps, setInstalledApps } = useZenStore();
-    const [apps, setApps] = useState<AppInfo[]>(installedApps);
+    const { installedApps, setInstalledApps, blockedApps, fetchBlockedApps, setBlockedApps } = useZenStore();
     const [searchText, setSearchText] = useState('');
-    const [blockedPackageNames, setBlockedPackageNames] = useState<Set<string>>(new Set());
     const [loading, setLoading] = useState(installedApps.length === 0);
+    const apps = installedApps;
+
+    const blockedSet = new Set(blockedApps.map((a: any) => a.packageName));
 
     useEffect(() => {
         const load = async () => {
             try {
-                // Only fetch if not already in store (Dashboard should have pre-fetched)
-                let currentApps = installedApps;
-                if (currentApps.length === 0) {
+                // Only fetch if not already in store
+                if (installedApps.length === 0) {
                     const installed = await AppScanner.getInstalledApps();
                     setInstalledApps(installed);
-                    setApps(installed);
-                    currentApps = installed;
-                } else {
-                    setApps(currentApps);
                 }
 
-                // Load blocked apps from DB
-                const blockedAppsCollection = database.get<BlockedApp>('blocked_apps');
-                const blockedRecords = await blockedAppsCollection.query().fetch();
-                const blockedSet = new Set(blockedRecords.map(r => r.packageName));
-
-                setBlockedPackageNames(blockedSet);
-
-                // Sync with Native Module to ensure it's up to date
-                AppScanner.setBlockedApps(Array.from(blockedSet));
+                // Fetch blocked apps from Native Engine
+                await fetchBlockedApps();
             } catch (e) {
                 console.error(e);
             } finally {
@@ -58,56 +44,34 @@ export const AppList = ({ onClose }: { onClose: () => void }) => {
 
     const toggleAppBlock = useCallback(async (app: AppInfo, newValue: boolean) => {
         try {
+            let newBlockedList = [...blockedApps];
+
             if (newValue) {
-                // Add to DB
-                await database.write(async () => {
-                    await database.get<BlockedApp>('blocked_apps').create(promo => {
-                        promo.packageName = app.packageName;
-                        promo.appName = app.appName;
-                        promo.iconUrl = app.icon; // Storing base64 directly for MVP
-                    });
+                // Add
+                newBlockedList.push({
+                    packageName: app.packageName,
+                    appName: app.appName,
+                    iconBase64: app.icon // Store base64 directly
                 });
-
-                setBlockedPackageNames(prev => {
-                    const next = new Set(prev);
-                    next.add(app.packageName);
-                    AppScanner.setBlockedApps(Array.from(next));
-                    return next;
-                });
-
             } else {
-                // Remove from DB
-                const blockedAppsCollection = database.get<BlockedApp>('blocked_apps');
-                const appsToDelete = await blockedAppsCollection.query(
-                    Q.where('package_name', app.packageName)
-                ).fetch();
-
-                if (appsToDelete.length > 0) {
-                    await database.write(async () => {
-                        for (const a of appsToDelete) {
-                            await a.destroyPermanently();
-                        }
-                    });
-                }
-
-                setBlockedPackageNames(prev => {
-                    const next = new Set(prev);
-                    next.delete(app.packageName);
-                    AppScanner.setBlockedApps(Array.from(next));
-                    return next;
-                });
+                // Remove
+                newBlockedList = newBlockedList.filter((a: any) => a.packageName !== app.packageName);
             }
+
+            // Update Store & Native
+            await setBlockedApps(newBlockedList);
+
         } catch (e) {
             console.error('Failed to toggle app block:', e);
         }
-    }, []);
+    }, [blockedApps, setBlockedApps]);
 
     const filteredApps = apps.filter(app =>
         app.appName.toLowerCase().includes(searchText.toLowerCase())
     );
 
     const renderItem = ({ item }: { item: AppInfo }) => {
-        const isBlocked = blockedPackageNames.has(item.packageName);
+        const isBlocked = blockedSet.has(item.packageName);
         return (
             <View style={styles.itemContainer}>
                 {item.icon ? (

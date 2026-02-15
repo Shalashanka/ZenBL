@@ -1,57 +1,29 @@
-import { NativeModules } from 'react-native';
-import { useZenStore } from '../store/zenStore';
+import NativeZenEngine from '../../specs/NativeZenEngine';
 
-const { AppBlocker } = NativeModules;
+const Engine = NativeZenEngine;
 
 export interface AppInfo {
     packageName: string;
     appName: string;
-    icon: string; // Base64 or file path
+    icon: string;
 }
 
 export const AppScanner = {
     getInstalledApps: async (): Promise<AppInfo[]> => {
         try {
-            const apps = await AppBlocker.getInstalledApps();
-            return apps;
+            if (!Engine) throw new Error('ZenEngine not available');
+            const apps = await Engine.getInstalledApps();
+            return apps as unknown as AppInfo[];
         } catch (error) {
             console.error("Failed to fetch apps", error);
             return [];
         }
     },
 
-    loadApps: async () => {
-        const { setInstalledApps, installedApps } = useZenStore.getState();
-
-        // Only fetch if not already in store
-        if (installedApps.length === 0) {
-            console.log("Fetching installed apps...");
-            try {
-                const apps = await AppBlocker.getInstalledApps();
-                setInstalledApps(apps);
-                console.log("Apps cached in ZenStore");
-            } catch (e) {
-                console.error("Failed to cache apps", e);
-            }
-        } else {
-            console.log("Using cached apps");
-        }
-    },
-
-    setBlockedApps: async (packageNames: string[]): Promise<void> => {
-        try {
-            if (AppBlocker?.setBlockedApps) {
-                AppBlocker.setBlockedApps(packageNames);
-            }
-        } catch (error) {
-            console.error('Failed to set blocked apps:', error);
-        }
-    },
-
     checkOverlayPermission: async (): Promise<boolean> => {
         try {
-            if (AppBlocker?.checkOverlayPermission) {
-                return await AppBlocker.checkOverlayPermission();
+            if (Engine?.checkOverlayPermission) {
+                return await Engine.checkOverlayPermission();
             }
             return false;
         } catch (error) {
@@ -62,9 +34,7 @@ export const AppScanner = {
 
     requestOverlayPermission: () => {
         try {
-            if (AppBlocker?.requestOverlayPermission) {
-                AppBlocker.requestOverlayPermission();
-            }
+            Engine?.requestOverlayPermission();
         } catch (error) {
             console.error('Failed to request overlay permission:', error);
         }

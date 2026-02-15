@@ -1,32 +1,43 @@
 import React, { useEffect, useState } from 'react';
-import { View, Text, StyleSheet, FlatList, TouchableOpacity, Switch, Modal, Platform } from 'react-native';
+import { View, Text, StyleSheet, FlatList, TouchableOpacity, Switch, Modal, Platform, TextInput, Alert } from 'react-native';
 import DateTimePicker from '@react-native-community/datetimepicker';
-import database from '../database';
-import Schedule from '../database/models/Schedule';
-import { Q } from '@nozbe/watermelondb';
+import { AppScanner } from '../services/AppScanner';
+import { useZenStore } from '../store/zenStore';
 
 export const ScheduleScreen = ({ onClose }: { onClose: () => void }) => {
     console.log('📅 ScheduleScreen Component Rendered');
-    const [schedules, setSchedules] = useState<Schedule[]>([]);
+    const {
+        schedules,
+        fetchSchedules,
+        saveSchedule: storeSaveSchedule,
+        deleteSchedule: storeDeleteSchedule,
+        installedApps,
+        setInstalledApps
+    } = useZenStore();
+
     const [isModalVisible, setModalVisible] = useState(false);
 
     // New Schedule State
-    const [selectedDays, setSelectedDays] = useState<number[]>([]);
+    const [editingId, setEditingId] = useState<number | null>(null);
+    const [selectedDays, setSelectedDays] = useState<number[]>([1, 2, 3, 4, 5]); // Default Mon-Fri
+    const [scheduleName, setScheduleName] = useState('');
+    const [recurrenceType, setRecurrenceType] = useState('daily');
+
+    // Blocking Strategy State
+    const [blockMode, setBlockMode] = useState<'global' | 'custom'>('global');
+    const [specificApps, setSpecificApps] = useState<string[]>([]);
+    const [isAppPickerVisible, setAppPickerVisible] = useState(false);
+
     const [startTime, setStartTime] = useState(new Date());
-    const [endTime, setEndTime] = useState(new Date());
+    const [endTime, setEndTime] = useState(new Date(new Date().getTime() + 60 * 60 * 1000)); // +1h default
 
     // Pickers visibility
     const [showStartPicker, setShowStartPicker] = useState(false);
     const [showEndPicker, setShowEndPicker] = useState(false);
 
     useEffect(() => {
-        loadSchedules();
+        fetchSchedules();
     }, []);
-
-    const loadSchedules = async () => {
-        const list = await database.get<Schedule>('schedules').query().fetch();
-        setSchedules(list);
-    };
 
     const days = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
 
@@ -42,48 +53,123 @@ export const ScheduleScreen = ({ onClose }: { onClose: () => void }) => {
         return date.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', hour12: false });
     };
 
+    const loadApps = async () => {
+        if (installedApps.length === 0) {
+            const apps = await AppScanner.getInstalledApps();
+            setInstalledApps(apps);
+        }
+    };
+
     const saveSchedule = async () => {
-        if (selectedDays.length === 0) return;
+        try {
+            const daysToSave = recurrenceType === 'daily' ? [0, 1, 2, 3, 4, 5, 6] : selectedDays;
 
-        await database.write(async () => {
-            const collection = database.get<Schedule>('schedules');
-            for (const day of selectedDays) {
-                await collection.create(schedule => {
-                    schedule.dayOfWeek = day;
-                    schedule.startTime = formatTime(startTime);
-                    schedule.endTime = formatTime(endTime);
-                    schedule.isEnabled = true;
-                    // TODO: Link to a profile if needed
-                    schedule.profile.id = 'default';
-                });
+            if (daysToSave.length === 0) {
+                Alert.alert('Selection Required', 'Please select at least one day.');
+                return;
             }
-        });
 
-        setModalVisible(false);
-        setSelectedDays([]);
-        loadSchedules();
+            console.log('[ScheduleScreen] Saving Schedule...', { scheduleName, recurrenceType, daysToSave, blockMode });
+
+            const specificAppsJson = blockMode === 'custom' ? JSON.stringify(specificApps) : undefined;
+
+            const scheduleData = {
+                id: editingId || 0, // 0 triggers insert
+                name: scheduleName || 'Unnamed Schedule',
+                startHour: startTime.getHours(),
+                startMinute: startTime.getMinutes(),
+                endHour: endTime.getHours(),
+                endMinute: endTime.getMinutes(),
+                daysOfWeek: daysToSave.join(','), // Native expects comma-separated string
+                isFortress: false, // Default for now
+                isEnabled: true,
+                blockedAppsJson: specificAppsJson
+            };
+
+            await storeSaveSchedule(scheduleData);
+
+            console.log('[ScheduleScreen] Save successful');
+            setModalVisible(false);
+            resetForm();
+        } catch (error: any) {
+            console.error('[ScheduleScreen] Failed to save schedule:', error);
+            Alert.alert('Save Failed', `Failed to save: ${error.message}`);
+        }
     };
 
-    const deleteSchedule = async (schedule: Schedule) => {
-        await database.write(async () => {
-            await schedule.destroyPermanently();
-        });
-        loadSchedules();
+    const resetForm = () => {
+        setEditingId(null);
+        setSelectedDays([1, 2, 3, 4, 5]);
+        setScheduleName('');
+        setBlockMode('global');
+        setSpecificApps([]);
     };
 
-    const toggleSchedule = async (schedule: Schedule) => {
-        await database.write(async () => {
-            await schedule.update(s => {
-                s.isEnabled = !s.isEnabled;
-            });
-        });
-        loadSchedules(); // Force refresh to show UI update if observer not set up
+    const deleteSchedule = async (id: number) => {
+        try {
+            await storeDeleteSchedule(id);
+        } catch (error) {
+            Alert.alert('Error', 'Failed to delete schedule');
+        }
     };
 
-    const renderItem = ({ item }: { item: Schedule }) => (
-        <View style={styles.card}>
+    const toggleSchedule = async (item: any) => {
+        // To toggle, we just update the same schedule with isEnabled flipped
+        try {
+            const updated = {
+                id: item.id,
+                name: item.name,
+                startHour: item.startHour,
+                startMinute: item.startMinute,
+                endHour: item.endHour,
+                endMinute: item.endMinute,
+                daysOfWeek: item.daysOfWeek,
+                isFortress: item.isFortress,
+                isEnabled: !item.isEnabled,
+                blockedAppsJson: item.blockedAppsJson
+            };
+            await storeSaveSchedule(updated);
+        } catch (e) {
+            console.error(e);
+        }
+    };
+
+    const openEditModal = (item: any) => {
+        setEditingId(item.id);
+        setScheduleName(item.name || '');
+        setRecurrenceType('custom'); // Always custom for now as we store specific days
+
+        const sTime = new Date();
+        sTime.setHours(item.startHour, item.startMinute, 0, 0);
+
+        const eTime = new Date();
+        eTime.setHours(item.endHour, item.endMinute, 0, 0);
+
+        setStartTime(sTime);
+        setEndTime(eTime);
+
+        if (item.blockedAppsJson) {
+            setBlockMode('custom');
+            try {
+                setSpecificApps(JSON.parse(item.blockedAppsJson));
+            } catch (e) {
+                setSpecificApps([]);
+            }
+        } else {
+            setBlockMode('global');
+            setSpecificApps([]);
+        }
+
+        const daysArr = item.daysOfWeek ? item.daysOfWeek.split(',').map(Number) : [];
+        setSelectedDays(daysArr);
+
+        setModalVisible(true);
+    };
+
+    const renderItem = ({ item }: { item: any }) => (
+        <TouchableOpacity style={styles.card} onPress={() => openEditModal(item)}>
             <View style={styles.cardHeader}>
-                <Text style={styles.dayText}>{days[item.dayOfWeek]}</Text>
+                <Text style={styles.dayText}>{item.name}</Text>
                 <Switch
                     value={item.isEnabled}
                     onValueChange={() => toggleSchedule(item)}
@@ -92,12 +178,20 @@ export const ScheduleScreen = ({ onClose }: { onClose: () => void }) => {
                 />
             </View>
             <Text style={styles.timeText}>
-                {item.startTime} - {item.endTime}
+                {`${item.startHour.toString().padStart(2, '0')}:${item.startMinute.toString().padStart(2, '0')} - ${item.endHour.toString().padStart(2, '0')}:${item.endMinute.toString().padStart(2, '0')}`}
             </Text>
-            <TouchableOpacity onPress={() => deleteSchedule(item)} style={styles.deleteBtn}>
+            <View style={{ flexDirection: 'row', flexWrap: 'wrap', marginTop: 4 }}>
+                {item.daysOfWeek.split(',').map((d: string) => (
+                    <Text key={d} style={styles.miniDayBadge}>{days[parseInt(d)]}</Text>
+                ))}
+            </View>
+            {item.blockedAppsJson && (
+                <Text style={styles.detailText}>Custom Blocklist Active</Text>
+            )}
+            <TouchableOpacity onPress={() => deleteSchedule(item.id)} style={styles.deleteBtn}>
                 <Text style={styles.deleteText}>Delete</Text>
             </TouchableOpacity>
-        </View>
+        </TouchableOpacity>
     );
 
     return (
@@ -111,33 +205,84 @@ export const ScheduleScreen = ({ onClose }: { onClose: () => void }) => {
 
             <FlatList
                 data={schedules}
-                keyExtractor={item => item.id}
+                keyExtractor={item => item.id.toString()}
                 renderItem={renderItem}
                 contentContainerStyle={{ paddingBottom: 80 }}
             />
 
-            <TouchableOpacity style={styles.fab} onPress={() => setModalVisible(true)}>
+            <TouchableOpacity style={styles.fab} onPress={() => { resetForm(); setModalVisible(true); }}>
                 <Text style={styles.fabText}>+</Text>
             </TouchableOpacity>
 
             <Modal visible={isModalVisible} animationType="slide" presentationStyle="pageSheet">
                 <View style={styles.modalContent}>
-                    <Text style={styles.modalTitle}>New Zen Schedule</Text>
+                    <Text style={styles.modalTitle}>{editingId ? 'Edit Schedule' : 'New Zen Schedule'}</Text>
 
-                    <Text style={styles.label}>Days</Text>
-                    <View style={styles.daysRow}>
-                        {days.map((day, index) => (
-                            <TouchableOpacity
-                                key={day}
-                                style={[styles.dayChip, selectedDays.includes(index) && styles.dayChipSelected]}
-                                onPress={() => toggleDay(index)}
-                            >
-                                <Text style={[styles.dayChipText, selectedDays.includes(index) && styles.dayChipTextSelected]}>
-                                    {day}
-                                </Text>
-                            </TouchableOpacity>
-                        ))}
+                    <Text style={styles.label}>Schedule Name</Text>
+                    <TextInput
+                        style={styles.input}
+                        placeholder="e.g. Morning Focus"
+                        value={scheduleName}
+                        onChangeText={setScheduleName}
+                    />
+
+                    <Text style={styles.label}>Recurrence</Text>
+                    <View style={styles.recurrenceRow}>
+                        <TouchableOpacity
+                            style={[styles.recurrenceBtn, recurrenceType === 'daily' && styles.recurrenceBtnSelected]}
+                            onPress={() => setRecurrenceType('daily')}>
+                            <Text style={[styles.recurrenceText, recurrenceType === 'daily' && styles.recurrenceTextSelected]}>Daily</Text>
+                        </TouchableOpacity>
+                        <TouchableOpacity
+                            style={[styles.recurrenceBtn, recurrenceType === 'custom' && styles.recurrenceBtnSelected]}
+                            onPress={() => setRecurrenceType('custom')}>
+                            <Text style={[styles.recurrenceText, recurrenceType === 'custom' && styles.recurrenceTextSelected]}>Custom</Text>
+                        </TouchableOpacity>
                     </View>
+
+                    {recurrenceType === 'custom' && (
+                        <>
+                            <Text style={styles.label}>Days</Text>
+                            <View style={styles.daysRow}>
+                                {days.map((day, index) => (
+                                    <TouchableOpacity
+                                        key={day}
+                                        style={[styles.dayChip, selectedDays.includes(index) && styles.dayChipSelected]}
+                                        onPress={() => toggleDay(index)}
+                                    >
+                                        <Text style={[styles.dayChipText, selectedDays.includes(index) && styles.dayChipTextSelected]}>
+                                            {day}
+                                        </Text>
+                                    </TouchableOpacity>
+                                ))}
+                            </View>
+                        </>
+                    )}
+
+                    <Text style={styles.label}>Blocking Strategy</Text>
+                    <View style={styles.recurrenceRow}>
+                        <TouchableOpacity
+                            style={[styles.recurrenceBtn, blockMode === 'global' && styles.recurrenceBtnSelected]}
+                            onPress={() => setBlockMode('global')}>
+                            <Text style={[styles.recurrenceText, blockMode === 'global' && styles.recurrenceTextSelected]}>Global List</Text>
+                        </TouchableOpacity>
+                        <TouchableOpacity
+                            style={[styles.recurrenceBtn, blockMode === 'custom' && styles.recurrenceBtnSelected]}
+                            onPress={() => {
+                                setBlockMode('custom');
+                                if (installedApps.length === 0) loadApps();
+                            }}>
+                            <Text style={[styles.recurrenceText, blockMode === 'custom' && styles.recurrenceTextSelected]}>Specific Apps</Text>
+                        </TouchableOpacity>
+                    </View>
+
+                    {blockMode === 'custom' && (
+                        <TouchableOpacity style={styles.selectAppsBtn} onPress={() => setAppPickerVisible(true)}>
+                            <Text style={styles.selectAppsText}>
+                                {specificApps.length > 0 ? `${specificApps.length} Apps Selected` : 'Select Apps'}
+                            </Text>
+                        </TouchableOpacity>
+                    )}
 
                     <Text style={styles.label}>Time Range</Text>
                     <View style={styles.timeRow}>
@@ -158,7 +303,10 @@ export const ScheduleScreen = ({ onClose }: { onClose: () => void }) => {
                             display="default"
                             onChange={(event, date) => {
                                 setShowStartPicker(Platform.OS === 'ios');
-                                if (date) setStartTime(date);
+                                if (date) {
+                                    setStartTime(date);
+                                    if (endTime <= date) setEndTime(new Date(date.getTime() + 60000));
+                                }
                             }}
                         />
                     )}
@@ -186,6 +334,35 @@ export const ScheduleScreen = ({ onClose }: { onClose: () => void }) => {
                     </View>
                 </View>
             </Modal>
+
+            {/* App Picker Modal */}
+            <Modal visible={isAppPickerVisible} animationType="slide" presentationStyle="pageSheet">
+                <View style={styles.modalContent}>
+                    <Text style={styles.modalTitle}>Select Apps to Block</Text>
+                    <FlatList
+                        data={installedApps}
+                        keyExtractor={item => item.packageName}
+                        renderItem={({ item }) => (
+                            <TouchableOpacity
+                                style={styles.appItem}
+                                onPress={() => {
+                                    if (specificApps.includes(item.packageName)) {
+                                        setSpecificApps(specificApps.filter(p => p !== item.packageName));
+                                    } else {
+                                        setSpecificApps([...specificApps, item.packageName]);
+                                    }
+                                }}
+                            >
+                                <Text style={styles.appName}>{item.appName}</Text>
+                                {specificApps.includes(item.packageName) && <Text style={styles.checkMark}>✓</Text>}
+                            </TouchableOpacity>
+                        )}
+                    />
+                    <TouchableOpacity onPress={() => setAppPickerVisible(false)} style={[styles.saveBtn, { marginTop: 20 }]}>
+                        <Text style={styles.saveText}>Done</Text>
+                    </TouchableOpacity>
+                </View>
+            </Modal>
         </View>
     );
 };
@@ -199,10 +376,12 @@ const styles = StyleSheet.create({
     cardHeader: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' },
     dayText: { fontSize: 18, fontWeight: '600' },
     timeText: { fontSize: 16, color: '#666', marginTop: 4 },
+    detailText: { fontSize: 12, color: '#007AFF', marginTop: 2, fontStyle: 'italic' },
     deleteBtn: { marginTop: 10, alignSelf: 'flex-start' },
     deleteText: { color: 'red', fontSize: 14 },
     fab: { position: 'absolute', bottom: 40, right: 20, width: 56, height: 56, borderRadius: 28, backgroundColor: '#007AFF', justifyContent: 'center', alignItems: 'center', elevation: 5 },
     fabText: { color: '#fff', fontSize: 30 },
+    miniDayBadge: { fontSize: 12, backgroundColor: '#eee', marginRight: 4, paddingHorizontal: 4, borderRadius: 4, overflow: 'hidden', color: '#555' },
 
     // Modal
     modalContent: { flex: 1, padding: 20, paddingTop: 50, backgroundColor: '#fff' },
@@ -220,4 +399,17 @@ const styles = StyleSheet.create({
     cancelText: { color: 'red', fontSize: 18 },
     saveBtn: { padding: 15, backgroundColor: '#007AFF', borderRadius: 8, paddingHorizontal: 30 },
     saveText: { color: '#fff', fontSize: 18, fontWeight: '600' },
+    input: { backgroundColor: '#eee', padding: 12, borderRadius: 8, fontSize: 16, marginBottom: 10 },
+    recurrenceRow: { flexDirection: 'row', marginBottom: 20 },
+    recurrenceBtn: { padding: 10, borderRadius: 8, borderWidth: 1, borderColor: '#ccc', marginRight: 10 },
+    recurrenceBtnSelected: { backgroundColor: '#007AFF', borderColor: '#007AFF' },
+    recurrenceText: { color: '#333' },
+    recurrenceTextSelected: { color: '#fff' },
+
+    selectAppsBtn: { padding: 15, backgroundColor: '#f0f0f5', borderRadius: 8, marginBottom: 20, alignItems: 'center', borderWidth: 1, borderColor: '#ddd' },
+    selectAppsText: { fontSize: 16, color: '#007AFF', fontWeight: '500' },
+
+    appItem: { flexDirection: 'row', justifyContent: 'space-between', padding: 15, borderBottomWidth: 1, borderBottomColor: '#eee', alignItems: 'center' },
+    appName: { fontSize: 16 },
+    checkMark: { color: '#007AFF', fontWeight: 'bold', fontSize: 18 },
 });

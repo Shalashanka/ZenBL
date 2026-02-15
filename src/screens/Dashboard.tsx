@@ -1,9 +1,8 @@
 import React, { useEffect } from 'react';
-import { View, Text, StyleSheet, TouchableOpacity, StatusBar } from 'react-native';
+import { View, Text, StyleSheet, TouchableOpacity, StatusBar, Switch } from 'react-native';
 import { useAccessibilityPermission } from '../hooks/useAccessibilityPermission';
 import { AppScanner } from '../services/AppScanner';
 import { useZenStore } from '../store/zenStore';
-import { ZenAudio } from '../services/ZenAudio';
 import Animated, {
     useSharedValue,
     useAnimatedStyle,
@@ -13,7 +12,7 @@ import Animated, {
     FadeOut
 } from 'react-native-reanimated';
 
-import { ScheduleManager } from '../services/ScheduleManager';
+// Engine handles schedule checking natively — no ScheduleManager needed
 // Screens handled by App.tsx now
 
 interface DashboardProps {
@@ -33,8 +32,13 @@ export const Dashboard = ({ onOpenAppList, onOpenSchedules }: DashboardProps) =>
         remainingTime,
         decrementTime,
         zenDuration,
-        setZenDuration
+        setZenDuration,
+        startZenMode: startZenModeAction,
+        pollEngineStatus,
     } = useZenStore();
+
+    // Local State
+    const [isFortressMode, setIsFortressMode] = React.useState(false);
 
     // Animations
     const overlayOpacity = useSharedValue(0);
@@ -52,23 +56,23 @@ export const Dashboard = ({ onOpenAppList, onOpenSchedules }: DashboardProps) =>
         };
         checkOverlay();
 
-        // Pre-fetch apps in background
-        AppScanner.loadApps();
-
-        // Start Schedule Manager
-        ScheduleManager.start();
-
         const interval = setInterval(checkOverlay, 2000);
         return () => clearInterval(interval);
     }, []);
 
-    // Timer Logic moved to GlobalZenOverlay
+    // Poll engine status when Zen is active
+    useEffect(() => {
+        if (!isZenModeActive) return;
+        const interval = setInterval(() => pollEngineStatus(), 1000);
+        return () => clearInterval(interval);
+    }, [isZenModeActive]);
 
-    const startZenMode = () => {
-        setZenModeActive(true);
-        ZenAudio.playFlute();
+    const handleStartZenMode = async () => {
+        // Engine handles everything: native audio, notification, blocking
+        // Blocked apps are already in Room DB via AppList
+        startZenModeAction(zenDuration, 'Quick Zen', isFortressMode);
 
-        overlayOpacity.value = withTiming(1, { duration: 3000 }); // Slow fade over 2.5s
+        overlayOpacity.value = withTiming(1, { duration: 3000 });
     };
 
     const exitZenMode = () => {
@@ -141,7 +145,22 @@ export const Dashboard = ({ onOpenAppList, onOpenSchedules }: DashboardProps) =>
 
             <View style={styles.spacer} />
 
-            <TouchableOpacity style={styles.activateButton} onPress={startZenMode}>
+            <View style={styles.card}>
+                <View style={styles.statusRow}>
+                    <View>
+                        <Text style={styles.statusLabel}>Fortress Mode 🔒</Text>
+                        <Text style={styles.miniText}>No exit until time is up.</Text>
+                    </View>
+                    <Switch
+                        value={isFortressMode}
+                        onValueChange={setIsFortressMode}
+                        trackColor={{ false: '#767577', true: '#FF3B30' }}
+                        thumbColor={isFortressMode ? '#fff' : '#f4f3f4'}
+                    />
+                </View>
+            </View>
+
+            <TouchableOpacity style={styles.activateButton} onPress={handleStartZenMode}>
                 <Text style={styles.activateButtonText}>ACTIVATE ZEN MODE</Text>
             </TouchableOpacity>
 
@@ -268,5 +287,10 @@ const styles = StyleSheet.create({
 
     spacer: {
         height: 20,
+    },
+    miniText: {
+        fontSize: 12,
+        color: '#8E8E93',
+        marginTop: 2,
     },
 });

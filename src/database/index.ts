@@ -4,6 +4,7 @@ import SQLiteAdapter from '@nozbe/watermelondb/adapters/sqlite'
 import LokiJSAdapter from '@nozbe/watermelondb/adapters/lokijs'
 
 import schema from './schema'
+import migrations from './migrations'
 import { BlockedApp, ZenProfile, Schedule } from './models'
 
 // Determine which adapter to use
@@ -24,7 +25,7 @@ const adapter = Platform.OS === 'web'
     : new SQLiteAdapter({
         schema,
         // (You might want to comment out migrationConfig if you don't have migrations yet)
-        // migrations,
+        migrations,
         jsi: true,
         onSetUpError: error => {
             // Database failed to load -- offer the user to reload the app or log out

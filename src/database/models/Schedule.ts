@@ -13,6 +13,9 @@ export default class Schedule extends Model {
     @field('start_time') startTime!: string
     @field('end_time') endTime!: string
     @field('is_enabled') isEnabled!: boolean
+    @field('name') name?: string
+    @field('recurrence_type') recurrenceType?: string
+    @field('specific_blocked_apps') specificBlockedApps?: string
     @readonly @date('created_at') createdAt!: number
     @readonly @date('updated_at') updatedAt!: number
 
