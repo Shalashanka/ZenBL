@@ -1,4 +1,4 @@
-package com.zenbl
+package com.zenox
 
 import android.content.Intent
 import android.content.pm.ResolveInfo
@@ -12,10 +12,10 @@ import android.util.Log
 import com.facebook.react.bridge.*
 import com.google.gson.Gson
 import com.google.gson.reflect.TypeToken
-import com.zenbl.engine.ZenEngine
-import com.zenbl.engine.db.BlockedAppEntity
-import com.zenbl.engine.db.ScheduleEntity
-import com.zenbl.engine.db.ZenDatabase
+import com.zenox.engine.ZenEngine
+import com.zenox.engine.db.BlockedAppEntity
+import com.zenox.engine.db.ScheduleEntity
+import com.zenox.engine.db.ZenDatabase
 import java.io.ByteArrayOutputStream
 import kotlinx.coroutines.*
 

@@ -1,4 +1,4 @@
-package com.zenbl
+package com.zenox
 
 import com.facebook.react.BaseReactPackage
 import com.facebook.react.bridge.NativeModule

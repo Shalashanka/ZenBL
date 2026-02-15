@@ -1,5 +1,5 @@
 {
-  "name": "zenbl",
+  "name": "zenox",
   "version": "1.0.0",
   "main": "index.ts",
   "scripts": {
@@ -31,7 +31,7 @@
     "type": "modules",
     "jsSrcsDir": "specs",
     "android": {
-      "javaPackageName": "com.zenbl"
+      "javaPackageName": "com.zenox"
     }
   }
 }

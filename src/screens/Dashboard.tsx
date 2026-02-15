@@ -94,7 +94,7 @@ export const Dashboard = ({ onOpenAppList, onOpenSchedules }: DashboardProps) =>
 
             {/* Main Dashboard Content */}
             <View style={styles.header}>
-                <Text style={styles.title}>ZenBL</Text>
+                <Text style={styles.title}>Zenox</Text>
                 <Text style={styles.subtitle}>Focus & Balance</Text>
             </View>
 

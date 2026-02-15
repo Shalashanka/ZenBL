@@ -1,4 +1,4 @@
-package com.zenbl
+package com.zenox
 
 import android.app.Application
 import android.content.res.Configuration
@@ -48,7 +48,7 @@ class MainApplication : Application(), ReactApplication {
     ApplicationLifecycleDispatcher.onApplicationCreate(this)
 
     // Initialize the Zenox Engine
-    com.zenbl.engine.ZenEngine.init(this)
+    com.zenox.engine.ZenEngine.init(this)
   }
 
   override fun onConfigurationChanged(newConfig: Configuration) {

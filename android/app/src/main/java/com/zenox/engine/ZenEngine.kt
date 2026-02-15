@@ -1,4 +1,4 @@
-package com.zenbl.engine
+package com.zenox.engine
 
 import android.content.Context
 import android.content.Intent
@@ -7,8 +7,9 @@ import android.os.Build
 import android.os.Handler
 import android.os.Looper
 import android.util.Log
-import com.zenbl.engine.db.ScheduleEntity
-import com.zenbl.engine.db.ZenDatabase
+import com.zenox.engine.db.ScheduleEntity
+import com.zenox.engine.db.ZenDatabase
+import org.json.JSONArray
 import java.util.Calendar
 import kotlinx.coroutines.*
 
@@ -18,8 +19,8 @@ import kotlinx.coroutines.*
  */
 object ZenEngine {
     private const val TAG = "ZenEngine"
-    private const val PREFS_NAME = "ZenBlockedApps"
-    private const val SCHEDULE_CHECK_INTERVAL = 30_000L // 30 seconds
+    private const val PREFS_NAME = "ZenoxBlockedApps"
+    private const val SCHEDULE_CHECK_INTERVAL = 15_000L // 15 seconds so we don't miss the start minute
 
     // State
     var isActive: Boolean = false
@@ -35,6 +36,7 @@ object ZenEngine {
     private lateinit var prefs: SharedPreferences
     private val handler = Handler(Looper.getMainLooper())
     private val engineScope = CoroutineScope(Dispatchers.IO + SupervisorJob())
+    @Volatile private var isInitialized = false
 
     private val scheduleChecker =
             object : Runnable {
@@ -45,6 +47,9 @@ object ZenEngine {
             }
 
     fun init(context: Context) {
+        if (isInitialized) return
+        isInitialized = true
+
         appContext = context.applicationContext
         prefs = appContext.getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)
         Log.d(TAG, "🧠 ZenEngine initialized")
@@ -70,7 +75,7 @@ object ZenEngine {
 
     fun startManualZen(durationSec: Int, fortress: Boolean = false) {
         val end = System.currentTimeMillis() + (durationSec * 1000L)
-        activateZen("Quick Zen", end, fortress)
+        activateZen("Quick Zen", end, fortress, null) // null = use global block list
     }
 
     fun stopZen() {
@@ -97,7 +102,7 @@ object ZenEngine {
     private fun playEndAudio() {
         try {
             val player =
-                    android.media.MediaPlayer.create(appContext, com.zenbl.R.raw.shakuhachi_blow)
+                    android.media.MediaPlayer.create(appContext, com.zenox.R.raw.shakuhachi_blow)
             player?.apply {
                 setVolume(0.5f, 0.5f)
                 start()
@@ -133,17 +138,44 @@ object ZenEngine {
 
     // ── Internal ──
 
-    private fun activateZen(name: String, endTime: Long, fortress: Boolean) {
+    /**
+     * @param scheduleBlockList If non-null, use this list for blocking (schedule-specific).
+     *                         If null, use global block list from Room DB.
+     */
+    private fun activateZen(
+        name: String,
+        endTime: Long,
+        fortress: Boolean,
+        scheduleBlockList: List<String>?
+    ) {
         Log.d(
                 TAG,
                 "🧘 Activating Zen: $name, fortress=$fortress, duration=${(endTime - System.currentTimeMillis()) / 1000}s"
         )
+
+        // Sync block list FIRST so accessibility service has blocked_packages before is_zen_mode_active is true
+        engineScope.launch {
+            try {
+                val packages = scheduleBlockList
+                    ?: run {
+                        val db = ZenDatabase.getInstance(appContext)
+                        db.zenDao().getBlockedPackageNames()
+                    }
+                syncBlockListToPrefs(packages)
+                Log.d(TAG, "🔒 Block list synced (${packages.size} packages), then activating Zen state")
+            } catch (e: Exception) {
+                Log.e(TAG, "Failed to sync block list", e)
+            }
+            handler.post { applyZenStateAndStartService(name, endTime, fortress) }
+        }
+    }
+
+    private fun applyZenStateAndStartService(name: String, endTime: Long, fortress: Boolean) {
         isActive = true
         endTimeMs = endTime
         scheduleName = name
         isFortress = fortress
 
-        // Persist state (survives process death)
         prefs.edit()
                 .putBoolean("is_zen_mode_active", true)
                 .putLong("zen_end_time", endTime)
@@ -151,18 +183,18 @@ object ZenEngine {
                 .putBoolean("is_fortress_mode", fortress)
                 .apply()
 
-        // Sync block list from Room DB
-        engineScope.launch {
-            try {
-                val db = ZenDatabase.getInstance(appContext)
-                val packages = db.zenDao().getBlockedPackageNames()
-                syncBlockListToPrefs(packages)
-            } catch (e: Exception) {
-                Log.e(TAG, "Failed to sync block list", e)
-            }
-        }
-
         startForegroundService()
+    }
+
+    private fun parseBlockedAppsJson(json: String?): List<String> {
+        if (json.isNullOrBlank()) return emptyList()
+        return try {
+            val arr = JSONArray(json)
+            List(arr.length()) { i -> arr.optString(i, "") }.filter { it.isNotEmpty() }
+        } catch (e: Exception) {
+            Log.e(TAG, "Failed to parse blockedAppsJson", e)
+            emptyList()
+        }
     }
 
     private fun checkSchedules() {
@@ -176,14 +208,31 @@ object ZenEngine {
                 val currentHour = now.get(Calendar.HOUR_OF_DAY)
                 val currentMinute = now.get(Calendar.MINUTE)
                 val currentDay = now.get(Calendar.DAY_OF_WEEK) // 1=Sun..7=Sat
-                // Convert to our format: 1=Mon..7=Sun
+                // Convert to our format: 7=Sun, 1=Mon..6=Sat
                 val dayOfWeek = if (currentDay == Calendar.SUNDAY) 7 else currentDay - 1
+
+                if (schedules.isNotEmpty()) {
+                    Log.d(TAG, "📅 Schedule check: ${schedules.size} enabled, now=$currentHour:$currentMinute day=$dayOfWeek")
+                }
 
                 for (schedule in schedules) {
                     if (isScheduleActiveNow(schedule, currentHour, currentMinute, dayOfWeek)) {
                         Log.d(TAG, "📅 Schedule match: ${schedule.name}")
                         val endTime = calculateEndTime(schedule)
-                        handler.post { activateZen(schedule.name, endTime, schedule.isFortress) }
+                        val packageList =
+                            if (!schedule.blockedAppsJson.isNullOrBlank()) {
+                                parseBlockedAppsJson(schedule.blockedAppsJson)
+                            } else {
+                                null
+                            }
+                        handler.post {
+                            activateZen(
+                                schedule.name,
+                                endTime,
+                                schedule.isFortress,
+                                packageList
+                            )
+                        }
                         break
                     }
                 }
@@ -199,20 +248,22 @@ object ZenEngine {
             minute: Int,
             dayOfWeek: Int
     ): Boolean {
-        // Check day
-        val days = schedule.daysOfWeek.split(",").mapNotNull { it.trim().toIntOrNull() }
+        // Check day. Engine uses 7=Sun, 1=Mon..6=Sat; normalize stored 0 (Sun from old JS) to 7
+        val days = schedule.daysOfWeek.split(",").mapNotNull { it.trim().toIntOrNull() }.map { if (it == 0) 7 else it }
         if (dayOfWeek !in days) return false
 
-        // Check time window
+        // Check time window (inclusive of start and end minute)
         val nowMinutes = hour * 60 + minute
         val startMinutes = schedule.startHour * 60 + schedule.startMinute
         val endMinutes = schedule.endHour * 60 + schedule.endMinute
 
         return if (endMinutes > startMinutes) {
-            nowMinutes in startMinutes until endMinutes
+            nowMinutes in startMinutes..endMinutes
+        } else if (endMinutes == startMinutes) {
+            nowMinutes == startMinutes
         } else {
             // Overnight schedule (e.g., 22:00 - 06:00)
-            nowMinutes >= startMinutes || nowMinutes < endMinutes
+            nowMinutes >= startMinutes || nowMinutes <= endMinutes
         }
     }
 

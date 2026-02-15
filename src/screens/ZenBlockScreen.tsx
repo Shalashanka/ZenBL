@@ -8,7 +8,7 @@ export const ZenBlockScreen = ({ onExit }: { onExit: () => void }) => {
         // Prevent hardware back button from returning to the blocked app immediately
         const backHandler = BackHandler.addEventListener('hardwareBackPress', () => {
             // We can either do nothing (forcing them to use home) or minimize app
-            // For now, let's allow it to just do default (which exits ZenBL)
+            // For now, let's allow it to just do default (which exits Zenox)
             // But typically a blocker wants to be persistent. 
 
             // Better UX: minimize the app when they try to leave, 
@@ -22,7 +22,7 @@ export const ZenBlockScreen = ({ onExit }: { onExit: () => void }) => {
     }, []);
 
     const handleLeave = () => {
-        // In a real blocker, this would minimize ZenBL. 
+        // In a real blocker, this would minimize Zenox. 
         // Since we don't have a specific native module for "minimize" yet, 
         // we will just call the onExit prop which presumably navigate back or does nothing.
         onExit();

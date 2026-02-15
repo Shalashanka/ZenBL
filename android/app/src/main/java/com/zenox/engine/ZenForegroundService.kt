@@ -1,4 +1,4 @@
-package com.zenbl.engine
+package com.zenox.engine
 
 import android.app.Notification
 import android.app.NotificationChannel
@@ -12,7 +12,7 @@ import android.os.CountDownTimer
 import android.os.IBinder
 import android.util.Log
 import androidx.core.app.NotificationCompat
-import com.zenbl.R
+import com.zenox.R
 
 class ZenForegroundService : Service() {
     companion object {

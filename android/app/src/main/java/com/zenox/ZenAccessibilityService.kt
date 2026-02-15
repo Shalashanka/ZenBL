@@ -1,4 +1,4 @@
-package com.zenbl
+package com.zenox
 
 import android.accessibilityservice.AccessibilityService
 import android.accessibilityservice.AccessibilityServiceInfo
@@ -15,6 +15,7 @@ import android.util.Log
 import android.view.Gravity
 import android.view.WindowManager
 import android.view.accessibility.AccessibilityEvent
+import android.content.pm.ResolveInfo
 import android.widget.Button
 import android.widget.FrameLayout
 import android.widget.LinearLayout
@@ -29,6 +30,9 @@ class ZenAccessibilityService :
 
     companion object {
         private const val TAG = "ZenAccessibility"
+        private const val REMOVE_OVERLAY_DELAY_MS = 1200L
+        private const val OVERLAY_ADD_RETRY_DELAY_MS = 150L
+        private const val HOME_TRANSITION_GRACE_MS = 1200L
     }
 
     private var wm: WindowManager? = null
@@ -36,63 +40,144 @@ class ZenAccessibilityService :
     private lateinit var prefs: SharedPreferences
     private var overlayView: FrameLayout? = null
     private var overlayParams: WindowManager.LayoutParams? = null
+    private val mainHandler = Handler(Looper.getMainLooper())
+    private var removeOverlayRunnable: Runnable? = null
+    private var isRemovingOverlay = false
+    private var suppressRemoveUntilMs = 0L
 
     override fun onAccessibilityEvent(event: AccessibilityEvent?) {
         if (event?.eventType == AccessibilityEvent.TYPE_WINDOW_STATE_CHANGED) {
-            val packageName = event.packageName?.toString() ?: "unknown"
+            val raw = event.packageName?.toString()?.trim() ?: return
+            val packageName = normalizePackageName(raw)
             lastActivePackage = packageName
             checkAndBlock(packageName)
         }
     }
 
+    /** Strip process suffix (e.g. ":push") so we match the base package name. */
+    private fun normalizePackageName(raw: String): String {
+        val s = raw.trim()
+        val colon = s.indexOf(':')
+        return if (colon > 0) s.substring(0, colon) else s
+    }
+
     private fun checkAndBlock(packageName: String) {
         if (!::prefs.isInitialized) {
-            prefs = getSharedPreferences("ZenBlockedApps", Context.MODE_PRIVATE)
+            prefs = getSharedPreferences("ZenoxBlockedApps", Context.MODE_PRIVATE)
         }
 
         val isZenActive = prefs.getBoolean("is_zen_mode_active", false)
-        if (!isZenActive) return
+        if (!isZenActive) {
+            cancelRemoveOverlayPending()
+            return
+        }
 
-        val blockedPackages = prefs.getStringSet("blocked_packages", emptySet()) ?: emptySet()
+        // Copy to new set — getStringSet can return a cached set that must not be modified
+        val blockedPackages = (prefs.getStringSet("blocked_packages", emptySet()) ?: emptySet()).toSet()
+        val normalizedBlocked = blockedPackages.map { normalizePackageName(it) }.toSet()
+
+        val isBlocked = normalizedBlocked.contains(packageName)
 
         Log.d(
                 TAG,
-                "Window: $packageName | Blocked(${blockedPackages.size}): ${blockedPackages.contains(packageName)}"
+                "Window: $packageName | Blocked(${blockedPackages.size}): $isBlocked"
         )
 
-        if (blockedPackages.contains(packageName)) {
+        if (isBlocked) {
+            cancelRemoveOverlayPending()
             Log.d(TAG, "🔴 BLOCKING: $packageName")
             blockApp()
         } else {
-            // It's a safe app (e.g. Launcher, Settings, or Zenox itself)
-            // Remove the overlay so the user isn't stuck
-            removeOverlayGracefully()
+            // When we force HOME after blocking, transient launcher events should not immediately
+            // tear down the overlay. Give the window stack time to settle.
+            if (overlayView != null && (isHomePackage(packageName) || System.currentTimeMillis() < suppressRemoveUntilMs)) {
+                return
+            }
+            // Debounce remove: transient windows (splash, dialog) can fire before the real app;
+            // delay remove so we don't hide the overlay too early only to show it again.
+            scheduleRemoveOverlayDelayed()
         }
     }
 
+    private fun isHomePackage(packageName: String): Boolean {
+        return try {
+            val homeIntent = Intent(Intent.ACTION_MAIN).addCategory(Intent.CATEGORY_HOME)
+            val resolveInfo: ResolveInfo? = packageManager.resolveActivity(homeIntent, 0)
+            val homePackage = resolveInfo?.activityInfo?.packageName
+            homePackage != null && normalizePackageName(homePackage) == packageName
+        } catch (_: Exception) {
+            false
+        }
+    }
+
+    private fun cancelRemoveOverlayPending() {
+        removeOverlayRunnable?.let { mainHandler.removeCallbacks(it) }
+        removeOverlayRunnable = null
+    }
+
+    private fun scheduleRemoveOverlayDelayed() {
+        cancelRemoveOverlayPending()
+        removeOverlayRunnable = Runnable {
+            removeOverlayRunnable = null
+            removeOverlayGracefully()
+        }
+        mainHandler.postDelayed(removeOverlayRunnable!!, REMOVE_OVERLAY_DELAY_MS)
+    }
+
     override fun onSharedPreferenceChanged(sharedPreferences: SharedPreferences?, key: String?) {
-        if (key == "is_zen_mode_active") {
-            val isActive = sharedPreferences?.getBoolean(key, false) ?: false
-            Log.d(TAG, "⚡ Zen Mode toggled: $isActive")
-            if (isActive) {
-                if (wm == null) wm = getSystemService(WINDOW_SERVICE) as WindowManager
-                checkAndBlock(lastActivePackage)
-            } else {
-                removeOverlayGracefully()
+        when (key) {
+            "is_zen_mode_active" -> {
+                val isActive = sharedPreferences?.getBoolean(key, false) ?: false
+                Log.d(TAG, "⚡ Zen Mode toggled: $isActive")
+                if (isActive) {
+                    cancelRemoveOverlayPending()
+                    if (wm == null) wm = getSystemService(WINDOW_SERVICE) as WindowManager
+                    checkAndBlock(lastActivePackage)
+                } else {
+                    cancelRemoveOverlayPending()
+                    removeOverlayGracefully()
+                }
+            }
+            "blocked_packages" -> {
+                cancelRemoveOverlayPending()
+                if (::prefs.isInitialized && prefs.getBoolean("is_zen_mode_active", false) && lastActivePackage.isNotEmpty()) {
+                    Log.d(TAG, "⚡ Block list updated, re-checking: $lastActivePackage")
+                    checkAndBlock(lastActivePackage)
+                }
             }
         }
     }
 
+    /**
+     * Must run overlay and WindowManager.addView on the main thread.
+     * onAccessibilityEvent is delivered on a binder thread, not the main thread.
+     */
     private fun blockApp() {
         if (wm == null) wm = getSystemService(WINDOW_SERVICE) as WindowManager
-        if (overlayView != null) return // Already showing
-
         playBlockingAudio()
-        setupOverlay()
-        performGlobalAction(GLOBAL_ACTION_HOME)
+
+        mainHandler.post {
+            suppressRemoveUntilMs = System.currentTimeMillis() + HOME_TRANSITION_GRACE_MS
+            if (overlayView != null) {
+                performGlobalAction(GLOBAL_ACTION_HOME)
+                return@post
+            }
+            if (isRemovingOverlay) {
+                performGlobalAction(GLOBAL_ACTION_HOME)
+                return@post
+            }
+            if (!setupOverlay()) {
+                mainHandler.postDelayed(
+                    { if (overlayView == null) setupOverlay() },
+                    OVERLAY_ADD_RETRY_DELAY_MS
+                )
+            }
+            performGlobalAction(GLOBAL_ACTION_HOME)
+        }
     }
 
-    private fun setupOverlay() {
+    /** @return true if overlay was added successfully, false to retry later */
+    private fun setupOverlay(): Boolean {
         overlayView = FrameLayout(this).apply { setBackgroundColor(0xFF0F2027.toInt()) }
 
         val content =
@@ -211,7 +296,7 @@ class ZenAccessibilityService :
                                                 prefs.edit()
                                                         .putBoolean("is_zen_mode_active", false)
                                                         .apply()
-                                                com.zenbl.engine.ZenEngine.stopZen()
+                                                com.zenox.engine.ZenEngine.stopZen()
 
                                                 // Relaunch the blocked app after a short delay
                                                 val appToRelaunch = lastActivePackage
@@ -291,26 +376,34 @@ class ZenAccessibilityService :
                     flags =
                             WindowManager.LayoutParams.FLAG_FULLSCREEN or
                                     WindowManager.LayoutParams.FLAG_LAYOUT_IN_SCREEN or
+                                    WindowManager.LayoutParams.FLAG_LAYOUT_NO_LIMITS or
                                     WindowManager.LayoutParams.FLAG_NOT_TOUCH_MODAL or
+                                    WindowManager.LayoutParams.FLAG_NOT_FOCUSABLE or
                                     WindowManager.LayoutParams.FLAG_HARDWARE_ACCELERATED
                     width = WindowManager.LayoutParams.MATCH_PARENT
                     height = WindowManager.LayoutParams.MATCH_PARENT
                     gravity = Gravity.CENTER
                 }
 
-        try {
+        return try {
             wm?.addView(overlayView, overlayParams)
             Log.d(TAG, "🚀 Overlay added")
+            true
         } catch (e: Exception) {
             Log.e(TAG, "❌ Failed to add overlay", e)
+            overlayView = null
+            false
         }
     }
 
     private fun removeOverlayGracefully() {
+        if (isRemovingOverlay) return
+        cancelRemoveOverlayPending()
         val viewToRemove = overlayView ?: return
         overlayView = null
+        isRemovingOverlay = true
 
-        Handler(Looper.getMainLooper()).post {
+        mainHandler.post {
             try {
                 val anim =
                         ValueAnimator.ofFloat(0f, 1f).apply {
@@ -332,6 +425,7 @@ class ZenAccessibilityService :
                                             try {
                                                 wm?.removeView(viewToRemove)
                                             } catch (_: Exception) {}
+                                            isRemovingOverlay = false
                                         }
                                     }
                             )
@@ -341,6 +435,7 @@ class ZenAccessibilityService :
                 try {
                     wm?.removeView(viewToRemove)
                 } catch (_: Exception) {}
+                isRemovingOverlay = false
             }
         }
     }
@@ -364,15 +459,17 @@ class ZenAccessibilityService :
     override fun onServiceConnected() {
         super.onServiceConnected()
         Log.d(TAG, "🟢 Zenox Accessibility Service CONNECTED")
+        com.zenox.engine.ZenEngine.init(applicationContext)
 
-        serviceInfo =
+        val info =
                 AccessibilityServiceInfo().apply {
                     eventTypes = AccessibilityEvent.TYPE_WINDOW_STATE_CHANGED
                     feedbackType = AccessibilityServiceInfo.FEEDBACK_GENERIC
                     notificationTimeout = 100
                 }
+        setServiceInfo(info)
 
-        prefs = getSharedPreferences("ZenBlockedApps", Context.MODE_PRIVATE)
+        prefs = getSharedPreferences("ZenoxBlockedApps", Context.MODE_PRIVATE)
         prefs.registerOnSharedPreferenceChangeListener(this)
     }
 

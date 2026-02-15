@@ -27,6 +27,7 @@ export const ScheduleScreen = ({ onClose }: { onClose: () => void }) => {
     const [blockMode, setBlockMode] = useState<'global' | 'custom'>('global');
     const [specificApps, setSpecificApps] = useState<string[]>([]);
     const [isAppPickerVisible, setAppPickerVisible] = useState(false);
+    const [appsLoading, setAppsLoading] = useState(false);
 
     const [startTime, setStartTime] = useState(new Date());
     const [endTime, setEndTime] = useState(new Date(new Date().getTime() + 60 * 60 * 1000)); // +1h default
@@ -54,10 +55,19 @@ export const ScheduleScreen = ({ onClose }: { onClose: () => void }) => {
     };
 
     const loadApps = async () => {
-        if (installedApps.length === 0) {
+        if (installedApps.length > 0) return;
+        setAppsLoading(true);
+        try {
             const apps = await AppScanner.getInstalledApps();
             setInstalledApps(apps);
+        } finally {
+            setAppsLoading(false);
         }
+    };
+
+    const openAppPicker = async () => {
+        await loadApps();
+        setAppPickerVisible(true);
     };
 
     const saveSchedule = async () => {
@@ -69,7 +79,10 @@ export const ScheduleScreen = ({ onClose }: { onClose: () => void }) => {
                 return;
             }
 
-            console.log('[ScheduleScreen] Saving Schedule...', { scheduleName, recurrenceType, daysToSave, blockMode });
+            // Native engine uses 7=Sun, 1=Mon..6=Sat; JS uses 0=Sun, 1=Mon..6=Sat
+            const daysForNative = daysToSave.map((d: number) => (d === 0 ? 7 : d));
+
+            console.log('[ScheduleScreen] Saving Schedule...', { scheduleName, recurrenceType, daysToSave, daysForNative, blockMode });
 
             const specificAppsJson = blockMode === 'custom' ? JSON.stringify(specificApps) : undefined;
 
@@ -80,7 +93,7 @@ export const ScheduleScreen = ({ onClose }: { onClose: () => void }) => {
                 startMinute: startTime.getMinutes(),
                 endHour: endTime.getHours(),
                 endMinute: endTime.getMinutes(),
-                daysOfWeek: daysToSave.join(','), // Native expects comma-separated string
+                daysOfWeek: daysForNative.join(','), // Native expects 7=Sun, 1=Mon..6=Sat
                 isFortress: false, // Default for now
                 isEnabled: true,
                 blockedAppsJson: specificAppsJson
@@ -160,8 +173,9 @@ export const ScheduleScreen = ({ onClose }: { onClose: () => void }) => {
             setSpecificApps([]);
         }
 
+        // Native stores 7=Sun, 1=Mon..6=Sat; UI uses 0=Sun, 1=Mon..6=Sat
         const daysArr = item.daysOfWeek ? item.daysOfWeek.split(',').map(Number) : [];
-        setSelectedDays(daysArr);
+        setSelectedDays(daysArr.map((d: number) => (d === 7 ? 0 : d)));
 
         setModalVisible(true);
     };
@@ -181,9 +195,10 @@ export const ScheduleScreen = ({ onClose }: { onClose: () => void }) => {
                 {`${item.startHour.toString().padStart(2, '0')}:${item.startMinute.toString().padStart(2, '0')} - ${item.endHour.toString().padStart(2, '0')}:${item.endMinute.toString().padStart(2, '0')}`}
             </Text>
             <View style={{ flexDirection: 'row', flexWrap: 'wrap', marginTop: 4 }}>
-                {item.daysOfWeek.split(',').map((d: string) => (
-                    <Text key={d} style={styles.miniDayBadge}>{days[parseInt(d)]}</Text>
-                ))}
+                {item.daysOfWeek.split(',').map((d: string) => {
+                    const n = parseInt(d, 10);
+                    return <Text key={d} style={styles.miniDayBadge}>{days[n === 7 ? 0 : n]}</Text>;
+                })}
             </View>
             {item.blockedAppsJson && (
                 <Text style={styles.detailText}>Custom Blocklist Active</Text>
@@ -277,9 +292,17 @@ export const ScheduleScreen = ({ onClose }: { onClose: () => void }) => {
                     </View>
 
                     {blockMode === 'custom' && (
-                        <TouchableOpacity style={styles.selectAppsBtn} onPress={() => setAppPickerVisible(true)}>
+                        <TouchableOpacity
+                            style={styles.selectAppsBtn}
+                            onPress={openAppPicker}
+                            disabled={appsLoading}
+                        >
                             <Text style={styles.selectAppsText}>
-                                {specificApps.length > 0 ? `${specificApps.length} Apps Selected` : 'Select Apps'}
+                                {appsLoading
+                                    ? 'Loading apps…'
+                                    : specificApps.length > 0
+                                        ? `${specificApps.length} Apps Selected`
+                                        : 'Select Apps'}
                             </Text>
                         </TouchableOpacity>
                     )}
@@ -339,6 +362,9 @@ export const ScheduleScreen = ({ onClose }: { onClose: () => void }) => {
             <Modal visible={isAppPickerVisible} animationType="slide" presentationStyle="pageSheet">
                 <View style={styles.modalContent}>
                     <Text style={styles.modalTitle}>Select Apps to Block</Text>
+                    {appsLoading && installedApps.length === 0 ? (
+                        <Text style={styles.loadingText}>Loading apps…</Text>
+                    ) : (
                     <FlatList
                         data={installedApps}
                         keyExtractor={item => item.packageName}
@@ -358,6 +384,7 @@ export const ScheduleScreen = ({ onClose }: { onClose: () => void }) => {
                             </TouchableOpacity>
                         )}
                     />
+                    )}
                     <TouchableOpacity onPress={() => setAppPickerVisible(false)} style={[styles.saveBtn, { marginTop: 20 }]}>
                         <Text style={styles.saveText}>Done</Text>
                     </TouchableOpacity>
@@ -412,4 +439,5 @@ const styles = StyleSheet.create({
     appItem: { flexDirection: 'row', justifyContent: 'space-between', padding: 15, borderBottomWidth: 1, borderBottomColor: '#eee', alignItems: 'center' },
     appName: { fontSize: 16 },
     checkMark: { color: '#007AFF', fontWeight: 'bold', fontSize: 18 },
+    loadingText: { fontSize: 16, color: '#666', padding: 20, textAlign: 'center' as const },
 });

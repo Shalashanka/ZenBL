@@ -1,4 +1,4 @@
-package com.zenbl.engine.db
+package com.zenox.engine.db
 
 import android.content.Context
 import androidx.room.Database
