@@ -1,11 +1,12 @@
-package com.zenox.engine.db
+package com.zenox.engine
 
 import androidx.room.Entity
 import androidx.room.PrimaryKey
 
 @Entity(tableName = "blocked_apps")
-data class BlockedAppEntity(
+data class BlockedApp(
     @PrimaryKey val packageName: String,
     val appName: String,
-    val iconBase64: String? = null
+    val isBlocked: Boolean,
+    val dailyLimitMinutes: Long,
 )

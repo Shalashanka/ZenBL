@@ -60,6 +60,7 @@ export const useZenStore = create<ZenState>()((set, get) => ({
 
     startZenMode: (durationSec, scheduleName, fortress) => {
         const endTime = Date.now() + durationSec * 1000;
+        const startedAt = Date.now();
         set({
             isZenModeActive: true,
             zenEndTime: endTime,
@@ -69,7 +70,9 @@ export const useZenStore = create<ZenState>()((set, get) => ({
         });
 
         if (Engine) {
+            console.log(`[ZenStore] triggerManualZen -> t=${startedAt} duration=${durationSec}s fortress=${fortress}`);
             Engine.triggerManualZen(durationSec, fortress);
+            console.log(`[ZenStore] triggerManualZen dispatched -> t=${Date.now()}`);
         } else {
             console.warn('[ZenStore] ZenEngine Native Module not found');
         }
@@ -85,6 +88,7 @@ export const useZenStore = create<ZenState>()((set, get) => ({
             scheduleName: '',
         });
         if (Engine) {
+            console.log(`[ZenStore] Stopping Zen Mode`);
             Engine.stopZen();
         }
     },

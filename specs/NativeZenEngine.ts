@@ -1,5 +1,5 @@
 import type { TurboModule } from 'react-native';
-import { TurboModuleRegistry } from 'react-native';
+import { NativeModules, TurboModuleRegistry } from 'react-native';
 
 export interface Spec extends TurboModule {
     // Core Methods
@@ -29,4 +29,8 @@ export interface Spec extends TurboModule {
     requestOverlayPermission(): void;
 }
 
-export default TurboModuleRegistry.get<Spec>('ZenEngine');
+const turbo = TurboModuleRegistry.get<Spec>('ZenoxBridge');
+
+const legacy = (NativeModules as Record<string, Spec | undefined>).ZenoxBridge;
+
+export default (turbo ?? legacy ?? null) as Spec | null;
