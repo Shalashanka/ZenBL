@@ -4,6 +4,7 @@ import { useNavigation } from '@react-navigation/native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { AppScanner } from '../services/AppScanner';
 import { useAccessibilityPermission } from '../hooks/useAccessibilityPermission';
+import { palette } from '../theme/palette';
 
 export const SettingsScreen = () => {
   const navigation = useNavigation<any>();
@@ -57,37 +58,39 @@ export const SettingsScreen = () => {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: '#ffffff',
+    backgroundColor: palette.inkSoft,
     padding: 16,
     paddingBottom: 120,
   },
   title: {
     fontSize: 24,
     fontWeight: '700',
-    color: '#111111',
+    color: palette.textPrimary,
     marginBottom: 12,
   },
   card: {
     borderWidth: 1,
-    borderColor: '#e0e0e0',
+    borderColor: '#5b4634',
     borderRadius: 12,
     padding: 14,
     marginBottom: 12,
-    backgroundColor: '#f7f7f7',
+    backgroundColor: '#34281f',
   },
   label: {
     fontSize: 14,
-    color: '#222222',
+    color: palette.paper,
     marginBottom: 8,
   },
   button: {
-    backgroundColor: '#111111',
+    backgroundColor: palette.ink,
     paddingVertical: 10,
     paddingHorizontal: 14,
     borderRadius: 8,
+    borderWidth: 1,
+    borderColor: '#6f543d',
   },
   buttonText: {
-    color: '#ffffff',
+    color: palette.paper,
     fontWeight: '600',
     fontSize: 14,
   },

@@ -1,6 +1,7 @@
 import React from 'react';
 import { ScrollView, StyleSheet, Text, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
+import { palette } from '../theme/palette';
 
 const HABITS = ['Morning planning', 'No social before noon', 'Wind-down at 22:30'];
 const SUBSCRIPTIONS = ['Focus Plan', 'Accountability Partner'];
@@ -36,7 +37,7 @@ export const LifeHubScreen = () => {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: '#ffffff',
+    backgroundColor: palette.inkSoft,
   },
   content: {
     padding: 16,
@@ -45,27 +46,26 @@ const styles = StyleSheet.create({
   title: {
     fontSize: 24,
     fontWeight: '700',
-    color: '#111111',
+    color: palette.textPrimary,
     marginBottom: 12,
   },
   card: {
     borderWidth: 1,
-    borderColor: '#e0e0e0',
+    borderColor: '#5b4634',
     borderRadius: 12,
     padding: 14,
     marginBottom: 12,
-    backgroundColor: '#f7f7f7',
+    backgroundColor: '#34281f',
   },
   cardTitle: {
     fontSize: 16,
     fontWeight: '700',
-    color: '#222222',
+    color: palette.paper,
     marginBottom: 8,
   },
   rowText: {
     fontSize: 14,
-    color: '#444444',
+    color: palette.paperSoft,
     marginBottom: 6,
   },
 });
-

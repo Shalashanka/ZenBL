@@ -2,12 +2,8 @@ import React from 'react';
 import { createBottomTabNavigator } from '@react-navigation/bottom-tabs';
 import { createNativeStackNavigator } from '@react-navigation/native-stack';
 import { Ionicons } from '@expo/vector-icons';
-import { HomeScreen } from '../screens/HomeScreen';
-import { DashboardScreen } from '../screens/DashboardScreen';
-import { LifeHubScreen } from '../screens/LifeHubScreen';
-import { SettingsScreen } from '../screens/SettingsScreen';
-import { AppList } from '../screens/AppList';
-import { ScheduleScreen } from '../screens/ScheduleScreen';
+import { AppList, DashboardScreen, HomeScreen, LifeHubScreen, ScheduleScreen, SettingsScreen } from '../screens';
+import { palette } from '../theme/palette';
 
 export type RootStackParamList = {
   Tabs: undefined;
@@ -30,9 +26,20 @@ const RootTabs = () => {
     <Tab.Navigator
       screenOptions={({ route }) => ({
         headerShown: false,
-        tabBarStyle: { backgroundColor: '#ffffff' },
-        tabBarActiveTintColor: '#111111',
-        tabBarInactiveTintColor: '#777777',
+        sceneStyle: { backgroundColor: palette.inkSoft },
+        tabBarStyle: {
+          backgroundColor: palette.ink,
+          borderTopColor: '#00000000',
+          height: 64,
+          paddingTop: 6,
+          paddingBottom: 12,
+        },
+        tabBarActiveTintColor: palette.paper,
+        tabBarInactiveTintColor: palette.muted,
+        tabBarLabelStyle: {
+          fontSize: 12,
+          fontWeight: '600',
+        },
         tabBarIcon: ({ color, size, focused }) => {
           let iconName: keyof typeof Ionicons.glyphMap = 'ellipse';
           if (route.name === 'Home') iconName = focused ? 'home' : 'home-outline';
