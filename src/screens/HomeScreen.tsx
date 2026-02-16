@@ -19,6 +19,7 @@ import Animated, {
   useAnimatedScrollHandler,
   useAnimatedStyle,
   useSharedValue,
+  withSpring,
   withTiming,
 } from 'react-native-reanimated';
 import { LinearGradient } from 'expo-linear-gradient';
@@ -29,8 +30,30 @@ import { useZenoxStatus } from '../hooks/useZenoxStatus';
 import { palette } from '../theme/palette';
 
 const { width: SCREEN_WIDTH, height: SCREEN_HEIGHT } = Dimensions.get('window');
-const CARD_HEIGHT = SCREEN_HEIGHT - 250;
+const CARD_HEIGHT = SCREEN_HEIGHT - 130;
 const CARD_WIDTH = SCREEN_WIDTH - 24;
+const CARD_INSET_X = 12;
+const CARD_INSET_TOP = 12;
+const CARD_INSET_BOTTOM = 12;
+const CARD_VISIBLE_HEIGHT = CARD_HEIGHT - CARD_INSET_TOP - CARD_INSET_BOTTOM;
+const HERO_MOVE_END = 0.84;
+const HERO_SECONDARY_START = 0.9;
+const EXPAND_SPRING = {
+  damping: 20,
+  stiffness: 70,
+  mass: 1.2,
+  overshootClamping: false,
+  restDisplacementThreshold: 0.001,
+  restSpeedThreshold: 0.001,
+} as const;
+const COLLAPSE_SPRING = {
+  damping: 20,
+  stiffness: 96,
+  mass: 1.0,
+  overshootClamping: false,
+  restDisplacementThreshold: 0.001,
+  restSpeedThreshold: 0.001,
+} as const;
 
 const PROFILES: ZenProfilePayload[] = [
   { id: 1, name: 'Deep Work', blockedApps: ['com.instagram.android', 'com.zhiliaoapp.musically'] },
@@ -51,21 +74,72 @@ type ProfileCardProps = {
   profile: ZenProfilePayload;
   imageUri: string;
   active: boolean;
+  carouselTop: number;
   scrollX: SharedValue<number>;
   onOpen: () => void;
 };
 
-const ProfileCard = ({ index, profile, imageUri, active, scrollX, onOpen }: ProfileCardProps) => {
+type AnimatedOptionRowProps = {
+  index: number;
+  label: string;
+  expandProgress: SharedValue<number>;
+};
+
+type PaginationDotProps = {
+  index: number;
+  scrollX: SharedValue<number>;
+};
+
+const AnimatedOptionRow = ({ index, label, expandProgress }: AnimatedOptionRowProps) => {
+  const optionStyle = useAnimatedStyle(() => {
+    const start = HERO_SECONDARY_START + index * 0.12;
+    const end = start + 0.42;
+    return {
+      opacity: interpolate(expandProgress.value, [start, end], [0, 1], Extrapolation.CLAMP),
+      transform: [
+        { translateX: interpolate(expandProgress.value, [start, end], [72, 0], Extrapolation.CLAMP) },
+        { scale: interpolate(expandProgress.value, [start, end], [0.95, 1], Extrapolation.CLAMP) },
+      ],
+    };
+  });
+
+  return (
+    <Animated.View style={optionStyle}>
+      <TouchableOpacity style={styles.optionButton}>
+        <Text style={styles.optionText}>{label}</Text>
+      </TouchableOpacity>
+    </Animated.View>
+  );
+};
+
+const PaginationDot = ({ index, scrollX }: PaginationDotProps) => {
+  const dotStyle = useAnimatedStyle(() => {
+    const inputRange = [(index - 1) * SCREEN_WIDTH, index * SCREEN_WIDTH, (index + 1) * SCREEN_WIDTH];
+    const intensity = interpolate(scrollX.value, inputRange, [0.35, 1, 0.35], Extrapolation.CLAMP);
+    return {
+      width: interpolate(scrollX.value, inputRange, [8, 18, 8], Extrapolation.CLAMP),
+      opacity: intensity,
+      backgroundColor: `rgba(244, 235, 222, ${interpolate(
+        scrollX.value,
+        inputRange,
+        [0.45, 1, 0.45],
+        Extrapolation.CLAMP
+      )})`,
+    };
+  });
+
+  return <Animated.View style={[styles.dot, dotStyle]} />;
+};
+
+const ProfileCard = ({ index, profile, imageUri, active, carouselTop, scrollX, onOpen }: ProfileCardProps) => {
   const containerStyle = useAnimatedStyle(() => {
     const inputRange = [(index - 1) * SCREEN_WIDTH, index * SCREEN_WIDTH, (index + 1) * SCREEN_WIDTH];
-    const rotate = interpolate(scrollX.value, inputRange, [1.6, 0, -1.6], Extrapolation.CLAMP);
 
     return {
-      opacity: interpolate(scrollX.value, inputRange, [0.38, 1, 0.38], Extrapolation.CLAMP),
+      opacity: interpolate(scrollX.value, inputRange, [0.76, 1, 0.76], Extrapolation.CLAMP),
       transform: [
-        { scale: interpolate(scrollX.value, inputRange, [0.88, 1, 0.88], Extrapolation.CLAMP) },
-        { translateY: interpolate(scrollX.value, inputRange, [36, 0, 36], Extrapolation.CLAMP) },
-        { rotateZ: `${rotate}deg` },
+        { scale: interpolate(scrollX.value, inputRange, [0.94, 1, 0.94], Extrapolation.CLAMP) },
+        { translateY: interpolate(scrollX.value, inputRange, [12, 0, 12], Extrapolation.CLAMP) },
       ],
     };
   });
@@ -73,7 +147,7 @@ const ProfileCard = ({ index, profile, imageUri, active, scrollX, onOpen }: Prof
   const imageParallaxStyle = useAnimatedStyle(() => {
     const inputRange = [(index - 1) * SCREEN_WIDTH, index * SCREEN_WIDTH, (index + 1) * SCREEN_WIDTH];
     return {
-      transform: [{ translateX: interpolate(scrollX.value, inputRange, [-56, 0, 56], Extrapolation.CLAMP) }],
+      transform: [{ translateX: interpolate(scrollX.value, inputRange, [-26, 0, 26], Extrapolation.CLAMP) }],
     };
   });
 
@@ -81,12 +155,22 @@ const ProfileCard = ({ index, profile, imageUri, active, scrollX, onOpen }: Prof
     <Animated.View style={[styles.card, containerStyle]}>
       <Pressable style={styles.cardPressable} onPress={onOpen}>
         <View style={styles.cardImageFrame}>
-          <Animated.Image source={{ uri: imageUri }} style={[styles.cardImage, imageParallaxStyle]} />
+          <Animated.Image
+            source={{ uri: imageUri }}
+            style={[
+              styles.cardImage,
+              {
+                top: -(carouselTop + CARD_INSET_TOP),
+                left: -CARD_INSET_X,
+              },
+              imageParallaxStyle,
+            ]}
+          />
         </View>
 
         <LinearGradient
-          colors={['rgba(8,7,6,0.00)', 'rgba(8,7,6,0.18)', 'rgba(8,7,6,0.48)', 'rgba(8,7,6,0.78)']}
-          locations={[0, 0.5, 0.76, 1]}
+          colors={['rgba(8,7,6,0.00)', 'rgba(8,7,6,0.18)', 'rgba(8,7,6,0.62)', 'rgba(8, 7, 6, 0.95)']}
+          locations={[0, 0.3, 0.66, 1]}
           style={styles.cardGradient}
         />
 
@@ -144,19 +228,13 @@ export const HomeScreen = () => {
     setExpandedProfileIndex(index);
     syncProfile(PROFILES[index]);
     expandProgress.value = 0;
-    expandProgress.value = withTiming(1, {
-      duration: 520,
-      easing: Easing.bezier(0.2, 0.85, 0.2, 1),
-    });
+    expandProgress.value = withSpring(1, EXPAND_SPRING);
   };
 
   const closeExpandedProfile = () => {
-    expandProgress.value = withTiming(
+    expandProgress.value = withSpring(
       0,
-      {
-        duration: 400,
-        easing: Easing.bezier(0.35, 0.05, 0.4, 1),
-      },
+      COLLAPSE_SPRING,
       (finished) => {
         if (finished) runOnJS(setExpandedProfileIndex)(null);
       }
@@ -164,26 +242,68 @@ export const HomeScreen = () => {
   };
 
   const expandedBoundsStyle = useAnimatedStyle(() => ({
-    top: interpolate(expandProgress.value, [0, 1], [carouselTop, 0], Extrapolation.CLAMP),
-    left: interpolate(expandProgress.value, [0, 1], [12, 0], Extrapolation.CLAMP),
+    top: interpolate(expandProgress.value, [0, 1], [carouselTop + CARD_INSET_TOP, 0], Extrapolation.CLAMP),
+    left: interpolate(expandProgress.value, [0, 1], [CARD_INSET_X, 0], Extrapolation.CLAMP),
     width: interpolate(expandProgress.value, [0, 1], [CARD_WIDTH, SCREEN_WIDTH], Extrapolation.CLAMP),
-    height: interpolate(expandProgress.value, [0, 1], [CARD_HEIGHT, SCREEN_HEIGHT], Extrapolation.CLAMP),
-    borderRadius: interpolate(expandProgress.value, [0, 1], [18, 0], Extrapolation.CLAMP),
+    height: interpolate(expandProgress.value, [0, 1], [CARD_VISIBLE_HEIGHT, SCREEN_HEIGHT], Extrapolation.CLAMP),
+    borderRadius: interpolate(expandProgress.value, [0, 0.9, 1], [18, 18, 0], Extrapolation.CLAMP),
+  }));
+
+  const expandedImageStyle = useAnimatedStyle(() => ({
+    width: SCREEN_WIDTH,
+    height: SCREEN_HEIGHT,
+    top: -interpolate(expandProgress.value, [0, 1], [carouselTop + CARD_INSET_TOP, 0], Extrapolation.CLAMP),
+    left: -interpolate(expandProgress.value, [0, 1], [CARD_INSET_X, 0], Extrapolation.CLAMP),
   }));
 
   const expandedContentStyle = useAnimatedStyle(() => ({
-    opacity: interpolate(expandProgress.value, [0, 0.55, 1], [0, 0, 1], Extrapolation.CLAMP),
-    transform: [{ translateY: interpolate(expandProgress.value, [0, 1], [20, 0], Extrapolation.CLAMP) }],
+    opacity: interpolate(expandProgress.value, [0, 0.1], [0, 1], Extrapolation.CLAMP),
+  }));
+
+  const heroMetaStyle = useAnimatedStyle(() => ({
+    top: interpolate(
+      expandProgress.value,
+      [0, HERO_MOVE_END],
+      [CARD_VISIBLE_HEIGHT - 84, 90],
+      Extrapolation.CLAMP
+    ),
+    opacity: interpolate(expandProgress.value, [0, 0.08, HERO_MOVE_END], [0, 1, 1], Extrapolation.CLAMP),
+    transform: [{ translateY: interpolate(expandProgress.value, [0, HERO_MOVE_END], [18, 0], Extrapolation.CLAMP) }],
+  }));
+
+  const backButtonAnimStyle = useAnimatedStyle(() => ({
+    opacity: interpolate(
+      expandProgress.value,
+      [HERO_SECONDARY_START, HERO_SECONDARY_START + 0.22],
+      [0, 1],
+      Extrapolation.CLAMP
+    ),
+    transform: [
+      {
+        translateX: interpolate(
+          expandProgress.value,
+          [HERO_SECONDARY_START, HERO_SECONDARY_START + 0.22],
+          [-12, 0],
+          Extrapolation.CLAMP
+        ),
+      },
+    ],
   }));
 
   const zenToneStyle = useAnimatedStyle(() => ({
     opacity: zenToneProgress.value,
   }));
 
+  const blurOverlayStyle = useAnimatedStyle(() => {
+    const baseBlur = interpolate(expandProgress.value, [0, 1], [0, 0.16], Extrapolation.CLAMP);
+    const zenBoost = interpolate(zenToneProgress.value, [0, 1], [0, 0.22], Extrapolation.CLAMP);
+    return {
+      opacity: baseBlur + zenBoost,
+    };
+  });
+
   return (
     <SafeAreaView style={styles.container} edges={['top']}>
-      <Text style={styles.title}>Home</Text>
-
       <View
         style={styles.carouselWrap}
         onLayout={(event) => {
@@ -194,7 +314,7 @@ export const HomeScreen = () => {
           data={PROFILES}
           horizontal
           pagingEnabled
-          decelerationRate="fast"
+          decelerationRate="normal"
           disableIntervalMomentum
           snapToAlignment="start"
           snapToInterval={SCREEN_WIDTH}
@@ -210,47 +330,63 @@ export const HomeScreen = () => {
               profile={item}
               imageUri={PROFILE_IMAGES[index % PROFILE_IMAGES.length]}
               active={index === activeProfileIndex}
+              carouselTop={carouselTop}
               scrollX={scrollX}
               onOpen={() => openProfile(index)}
             />
           )}
         />
+        {expandedProfile ? null : (
+          <View style={styles.paginationRow}>
+            {PROFILES.map((profile, idx) => (
+              <PaginationDot key={profile.id} index={idx} scrollX={scrollX} />
+            ))}
+          </View>
+        )}
       </View>
 
       {expandedProfile ? (
         <Animated.View style={[styles.expandedBounds, expandedBoundsStyle]}>
-          <Image source={{ uri: PROFILE_IMAGES[expandedProfileIndex! % PROFILE_IMAGES.length] }} style={styles.expandedImage} />
+          <Animated.Image
+            source={{ uri: PROFILE_IMAGES[expandedProfileIndex! % PROFILE_IMAGES.length] }}
+            style={[styles.expandedImage, expandedImageStyle]}
+          />
+          <Animated.Image
+            source={{ uri: PROFILE_IMAGES[expandedProfileIndex! % PROFILE_IMAGES.length] }}
+            blurRadius={16}
+            style={[styles.expandedImage, expandedImageStyle, blurOverlayStyle]}
+          />
           <Animated.View style={[styles.zenToneLayer, zenToneStyle]} />
 
           <LinearGradient
-            colors={['rgba(4,3,2,0.10)', 'rgba(4,3,2,0.22)', 'rgba(4,3,2,0.58)', 'rgba(4,3,2,0.85)']}
-            locations={[0, 0.42, 0.75, 1]}
+            colors={['rgba(8,7,6,0.18)', 'rgba(8,7,6,0.24)', 'rgba(8,7,6,0.58)', 'rgba(8,7,6,0.84)']}
+            locations={[0, 0.42, 0.74, 1]}
             style={styles.expandedGradient}
           />
 
           <Animated.View style={[styles.expandedUi, expandedContentStyle]}>
             <SafeAreaView style={styles.expandedSafe}>
               <View style={styles.expandedHeader}>
-                <TouchableOpacity onPress={closeExpandedProfile} style={styles.backButton}>
-                  <Text style={styles.backButtonText}>Back</Text>
-                </TouchableOpacity>
+                <Animated.View style={backButtonAnimStyle}>
+                  <TouchableOpacity onPress={closeExpandedProfile} style={styles.backButton}>
+                    <Text style={styles.backButtonText}>Back</Text>
+                  </TouchableOpacity>
+                </Animated.View>
               </View>
 
-              <View style={styles.expandedInfo}>
+              <Animated.View style={[styles.heroMeta, heroMetaStyle]}>
                 <View style={styles.titleRow}>
                   <Text style={styles.expandedTitle}>{expandedProfile.name}</Text>
                   <View style={styles.tagActive}>
                     <Text style={styles.activeTagText}>ACTIVE</Text>
                   </View>
                 </View>
-                <Text style={styles.expandedSub}>Profile options</Text>
-              </View>
+                <Text style={styles.expandedSub}>Blocked Apps: {expandedProfile.blockedApps.length}</Text>
+              </Animated.View>
 
               <View style={styles.optionsContainer}>
-                {PROFILE_OPTIONS.map((option) => (
-                  <TouchableOpacity key={option} style={styles.optionButton}>
-                    <Text style={styles.optionText}>{option}</Text>
-                  </TouchableOpacity>
+                {PROFILE_OPTIONS.map((option, idx) => (
+                  <AnimatedOptionRow key={option} index={idx} label={option} expandProgress={expandProgress} />
                 ))}
               </View>
             </SafeAreaView>
@@ -282,8 +418,9 @@ const styles = StyleSheet.create({
   card: {
     width: SCREEN_WIDTH,
     height: CARD_HEIGHT,
-    paddingHorizontal: 12,
-    paddingBottom: 12,
+    paddingHorizontal: CARD_INSET_X,
+    paddingBottom: CARD_INSET_BOTTOM,
+    paddingTop: CARD_INSET_TOP,
   },
   cardPressable: {
     width: '100%',
@@ -298,8 +435,9 @@ const styles = StyleSheet.create({
     borderRadius: 18,
   },
   cardImage: {
-    width: '130%',
-    height: '100%',
+    position: 'absolute',
+    width: SCREEN_WIDTH,
+    height: SCREEN_HEIGHT,
     backgroundColor: '#46352a',
   },
   cardGradient: {
@@ -356,9 +494,7 @@ const styles = StyleSheet.create({
     zIndex: 100,
   },
   expandedImage: {
-    ...StyleSheet.absoluteFillObject,
-    width: undefined,
-    height: undefined,
+    position: 'absolute',
   },
   zenToneLayer: {
     ...StyleSheet.absoluteFillObject,
@@ -377,6 +513,7 @@ const styles = StyleSheet.create({
   expandedHeader: {
     paddingHorizontal: 14,
     paddingTop: 4,
+    zIndex: 5,
   },
   backButton: {
     alignSelf: 'flex-start',
@@ -390,9 +527,10 @@ const styles = StyleSheet.create({
     fontWeight: '600',
     fontSize: 14,
   },
-  expandedInfo: {
-    paddingHorizontal: 20,
-    marginTop: 20,
+  heroMeta: {
+    position: 'absolute',
+    left: 20,
+    right: 20,
   },
   expandedTitle: {
     color: '#f8ead7',
@@ -409,6 +547,21 @@ const styles = StyleSheet.create({
     paddingHorizontal: 20,
     paddingBottom: 150,
     gap: 10,
+  },
+  paginationRow: {
+    position: 'absolute',
+    bottom: 8,
+    left: 0,
+    right: 0,
+    flexDirection: 'row',
+    justifyContent: 'center',
+    alignItems: 'center',
+    gap: 8,
+  },
+  dot: {
+    height: 8,
+    borderRadius: 999,
+    backgroundColor: 'rgba(244, 235, 222, 0.45)',
   },
   optionButton: {
     borderRadius: 10,
