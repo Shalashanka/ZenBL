@@ -1,6 +1,7 @@
 package com.zenox.bridge
 
 import android.content.Intent
+import android.content.Context
 import android.content.pm.ApplicationInfo
 import android.content.pm.PackageManager
 import android.net.Uri
@@ -341,6 +342,20 @@ class ZenoxBridgeModule(
             reactApplicationContext.startActivity(intent)
         } catch (exception: Exception) {
             Log.e(TAG, "requestOverlayPermission failed", exception)
+        }
+    }
+
+    @ReactMethod
+    fun setActiveProfile(profileJson: String) {
+        try {
+            reactApplicationContext
+                .getSharedPreferences("zenox_profile_sync", Context.MODE_PRIVATE)
+                .edit()
+                .putString("active_profile_json", profileJson)
+                .apply()
+            Log.i(TAG, "Active profile synced to native engine context")
+        } catch (exception: Exception) {
+            Log.e(TAG, "setActiveProfile failed", exception)
         }
     }
 

@@ -12,8 +12,10 @@ import {
 } from 'react-native';
 import { AppScanner, AppInfo } from '../services/AppScanner';
 import { useZenStore } from '../store/zenStore';
+import { useNavigation } from '@react-navigation/native';
 
-export const AppList = ({ onClose }: { onClose: () => void }) => {
+export const AppList = ({ onClose }: { onClose?: () => void }) => {
+    const navigation = useNavigation<any>();
     console.log('📱 AppList Component Rendered');
     const { installedApps, setInstalledApps, blockedApps, fetchBlockedApps, setBlockedApps } = useZenStore();
     const [searchText, setSearchText] = useState('');
@@ -66,7 +68,7 @@ export const AppList = ({ onClose }: { onClose: () => void }) => {
         }
     }, [blockedApps, setBlockedApps]);
 
-    const filteredApps = apps.filter(app =>
+    const filteredApps = apps.filter((app: AppInfo) =>
         app.appName.toLowerCase().includes(searchText.toLowerCase())
     );
 
@@ -100,7 +102,7 @@ export const AppList = ({ onClose }: { onClose: () => void }) => {
         <View style={styles.container}>
             <View style={styles.header}>
                 <Text style={styles.title}>Block List</Text>
-                <TouchableOpacity onPress={onClose} style={styles.closeButton}>
+                <TouchableOpacity onPress={() => (onClose ? onClose() : navigation.goBack())} style={styles.closeButton}>
                     <Text style={styles.closeText}>Done</Text>
                 </TouchableOpacity>
             </View>

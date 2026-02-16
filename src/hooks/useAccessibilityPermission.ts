@@ -1,16 +1,14 @@
 import { useState, useEffect, useCallback } from 'react';
 import { AppState, AppStateStatus } from 'react-native';
-import NativeZenEngine from '../../specs/NativeZenEngine';
-
-const Engine = NativeZenEngine;
+import { ZenoxEngine } from '../bridge/ZenoxEngine';
 
 export const useAccessibilityPermission = () => {
     const [isServiceEnabled, setIsServiceEnabled] = useState(false);
 
     const checkPermission = useCallback(async () => {
         try {
-            if (Engine?.isServiceEnabled) {
-                const enabled = await Engine.isServiceEnabled();
+            if (ZenoxEngine.isAvailable()) {
+                const enabled = await ZenoxEngine.isServiceEnabled();
                 setIsServiceEnabled(enabled);
             } else {
                 console.warn('ZenEngine Native Module not found');
@@ -21,8 +19,8 @@ export const useAccessibilityPermission = () => {
     }, []);
 
     const openSettings = useCallback(() => {
-        if (Engine?.openAccessibilitySettings) {
-            Engine.openAccessibilitySettings();
+        if (ZenoxEngine.isAvailable()) {
+            ZenoxEngine.openAccessibilitySettings();
         } else {
             console.warn('ZenEngine Native Module not found');
         }

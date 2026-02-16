@@ -3,8 +3,10 @@ import { View, Text, StyleSheet, FlatList, TouchableOpacity, Switch, Modal, Plat
 import DateTimePicker from '@react-native-community/datetimepicker';
 import { AppScanner } from '../services/AppScanner';
 import { useZenStore } from '../store/zenStore';
+import { useNavigation } from '@react-navigation/native';
 
-export const ScheduleScreen = ({ onClose }: { onClose: () => void }) => {
+export const ScheduleScreen = ({ onClose }: { onClose?: () => void }) => {
+    const navigation = useNavigation<any>();
     console.log('📅 ScheduleScreen Component Rendered');
     const {
         schedules,
@@ -213,7 +215,7 @@ export const ScheduleScreen = ({ onClose }: { onClose: () => void }) => {
         <View style={styles.container}>
             <View style={styles.header}>
                 <Text style={styles.title}>Schedules</Text>
-                <TouchableOpacity onPress={onClose}>
+                <TouchableOpacity onPress={() => (onClose ? onClose() : navigation.goBack())}>
                     <Text style={styles.closeText}>Done</Text>
                 </TouchableOpacity>
             </View>

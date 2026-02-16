@@ -1,7 +1,5 @@
 import { create } from 'zustand';
-import NativeZenEngine from '../../specs/NativeZenEngine';
-
-const Engine = NativeZenEngine;
+import { ZenoxEngine } from '../bridge/ZenoxEngine';
 
 interface ZenState {
     isZenModeActive: boolean;
@@ -11,6 +9,7 @@ interface ZenState {
     fortressModeEnabled: boolean;
     scheduleName: string;
     // Data
+    installedApps: any[];
     schedules: any[];
     blockedApps: any[];
 
@@ -69,9 +68,9 @@ export const useZenStore = create<ZenState>()((set, get) => ({
             scheduleName: scheduleName,
         });
 
-        if (Engine) {
+        if (ZenoxEngine.isAvailable()) {
             console.log(`[ZenStore] triggerManualZen -> t=${startedAt} duration=${durationSec}s fortress=${fortress}`);
-            Engine.triggerManualZen(durationSec, fortress);
+            ZenoxEngine.startZen(durationSec, fortress);
             console.log(`[ZenStore] triggerManualZen dispatched -> t=${Date.now()}`);
         } else {
             console.warn('[ZenStore] ZenEngine Native Module not found');
@@ -87,16 +86,16 @@ export const useZenStore = create<ZenState>()((set, get) => ({
             fortressModeEnabled: false,
             scheduleName: '',
         });
-        if (Engine) {
+        if (ZenoxEngine.isAvailable()) {
             console.log(`[ZenStore] Stopping Zen Mode`);
-            Engine.stopZen();
+            ZenoxEngine.stopZen();
         }
     },
 
     pollEngineStatus: async () => {
-        if (!Engine) return;
+        if (!ZenoxEngine.isAvailable()) return;
         try {
-            const status = await Engine.getEngineStatus();
+            const status = await ZenoxEngine.getZenStatus();
             set({
                 isZenModeActive: status.isActive,
                 remainingTime: status.remainingSeconds,
@@ -109,9 +108,9 @@ export const useZenStore = create<ZenState>()((set, get) => ({
     },
 
     fetchSchedules: async () => {
-        if (!Engine) return;
+        if (!ZenoxEngine.isAvailable()) return;
         try {
-            const list = await Engine.fetchSchedules();
+            const list = await ZenoxEngine.fetchSchedules();
             set({ schedules: list });
         } catch (e) {
             console.error('[ZenStore] fetchSchedules failed', e);
@@ -119,9 +118,9 @@ export const useZenStore = create<ZenState>()((set, get) => ({
     },
 
     saveSchedule: async (schedule) => {
-        if (!Engine) return;
+        if (!ZenoxEngine.isAvailable()) return;
         try {
-            await Engine.saveSchedule(JSON.stringify(schedule));
+            await ZenoxEngine.saveSchedule(JSON.stringify(schedule));
             await get().fetchSchedules(); // Refresh list
         } catch (e) {
             console.error('[ZenStore] saveSchedule failed', e);
@@ -130,9 +129,9 @@ export const useZenStore = create<ZenState>()((set, get) => ({
     },
 
     deleteSchedule: async (id) => {
-        if (!Engine) return;
+        if (!ZenoxEngine.isAvailable()) return;
         try {
-            await Engine.deleteSchedule(id);
+            await ZenoxEngine.deleteSchedule(id);
             await get().fetchSchedules(); // Refresh list
         } catch (e) {
             console.error('[ZenStore] deleteSchedule failed', e);
@@ -141,9 +140,9 @@ export const useZenStore = create<ZenState>()((set, get) => ({
     },
 
     fetchBlockedApps: async () => {
-        if (!Engine) return;
+        if (!ZenoxEngine.isAvailable()) return;
         try {
-            const list = await Engine.fetchBlockedApps();
+            const list = await ZenoxEngine.fetchBlockedApps();
             set({ blockedApps: list });
         } catch (e) {
             console.error('[ZenStore] fetchBlockedApps failed', e);
@@ -151,9 +150,9 @@ export const useZenStore = create<ZenState>()((set, get) => ({
     },
 
     setBlockedApps: async (apps) => {
-        if (!Engine) return;
+        if (!ZenoxEngine.isAvailable()) return;
         try {
-            Engine.setBlockedApps(JSON.stringify(apps));
+            ZenoxEngine.setBlockedApps(JSON.stringify(apps));
             set({ blockedApps: apps });
         } catch (e) {
             console.error('[ZenStore] setBlockedApps failed', e);

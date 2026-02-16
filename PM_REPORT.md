@@ -29,3 +29,8 @@ The project direction changed during development:
 ## Risks / Notes
 - This repo currently contains historical deleted/renamed files from earlier migration steps in git status; they are not required for runtime.
 - Recommend one follow-up pass to remove any truly unused assets and finalize commit hygiene.
+
+## Future Work Queue
+- Style the native Kotlin blocking overlay in `android/app/src/main/java/com/zenox/engine/ZenoxOverlayService.kt` without changing engine behavior.
+- Wire true profile-specific native enforcement by consuming synced `active_profile_json` when Zen is started/enforced.
+- Add additional UI polish for tab visuals and wireframe refinement after functional structure is fully verified.

@@ -1,6 +1,4 @@
-import NativeZenEngine from '../../specs/NativeZenEngine';
-
-const Engine = NativeZenEngine;
+import { ZenoxEngine } from '../bridge/ZenoxEngine';
 
 export interface AppInfo {
     packageName: string;
@@ -11,8 +9,8 @@ export interface AppInfo {
 export const AppScanner = {
     getInstalledApps: async (): Promise<AppInfo[]> => {
         try {
-            if (!Engine) throw new Error('ZenEngine not available');
-            const apps = await Engine.getInstalledApps();
+            if (!ZenoxEngine.isAvailable()) throw new Error('ZenEngine not available');
+            const apps = await ZenoxEngine.getInstalledApps();
             return apps as unknown as AppInfo[];
         } catch (error) {
             console.error("Failed to fetch apps", error);
@@ -22,10 +20,7 @@ export const AppScanner = {
 
     checkOverlayPermission: async (): Promise<boolean> => {
         try {
-            if (Engine?.checkOverlayPermission) {
-                return await Engine.checkOverlayPermission();
-            }
-            return false;
+            return await ZenoxEngine.checkOverlayPermission();
         } catch (error) {
             console.error('Failed to check overlay permission:', error);
             return false;
@@ -34,7 +29,7 @@ export const AppScanner = {
 
     requestOverlayPermission: () => {
         try {
-            Engine?.requestOverlayPermission();
+            ZenoxEngine.requestOverlayPermission();
         } catch (error) {
             console.error('Failed to request overlay permission:', error);
         }

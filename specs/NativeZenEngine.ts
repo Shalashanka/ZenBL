@@ -27,6 +27,7 @@ export interface Spec extends TurboModule {
     isServiceEnabled(): Promise<boolean>;
     checkOverlayPermission(): Promise<boolean>;
     requestOverlayPermission(): void;
+    setActiveProfile?(profileJson: string): void;
 }
 
 const turbo = TurboModuleRegistry.get<Spec>('ZenoxBridge');
