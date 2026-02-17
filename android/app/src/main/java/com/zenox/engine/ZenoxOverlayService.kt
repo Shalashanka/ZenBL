@@ -30,8 +30,9 @@ class ZenoxOverlayService : Service() {
     private var windowManager: WindowManager? = null
     private var overlayView: View? = null
     private val mainHandler = Handler(Looper.getMainLooper())
+    private var selectedBreakDurationMillis: Long = BREAK_OPTIONS.first().first
     private val emergencyHoldRunnable = Runnable {
-        ZenoxManager.requestEmergencyBreak()
+        ZenoxManager.requestEmergencyBreak(durationMillis = selectedBreakDurationMillis)
         hideOverlay()
     }
     private var showHoldHintRunnable: Runnable? = null
@@ -209,13 +210,59 @@ class ZenoxOverlayService : Service() {
         }
 
         val holdLabel = TextView(this).apply {
-            text = "Need 5 Minutes? Hold to Unlock"
+            text = "Need a break? Hold to unlock"
             gravity = Gravity.CENTER
             setTextColor(textColor)
             textSize = 16f
             typeface = Typeface.DEFAULT_BOLD
             setPadding(dp(16), dp(14), dp(16), dp(14))
         }
+
+        val durationWrap = LinearLayout(this).apply {
+            orientation = LinearLayout.HORIZONTAL
+            gravity = Gravity.CENTER
+        }
+        val optionButtons = mutableMapOf<Long, TextView>()
+
+        fun updateSelectedDuration(durationMillis: Long) {
+            selectedBreakDurationMillis = durationMillis
+            optionButtons.forEach { (optionDuration, button) ->
+                val selected = optionDuration == durationMillis
+                button.background = GradientDrawable().apply {
+                    shape = GradientDrawable.RECTANGLE
+                    cornerRadius = dp(999).toFloat()
+                    setColor(if (selected) accentColor else Color.TRANSPARENT)
+                    setStroke(dp(1), if (selected) accentColor else Color.parseColor("#33FFFFFF"))
+                }
+                button.setTextColor(if (selected) textColor else mutedTextColor)
+            }
+            val label = BREAK_OPTIONS.firstOrNull { it.first == durationMillis }?.second ?: "5m"
+            holdHint.text = "Hold 5s to unlock for $label"
+        }
+
+        BREAK_OPTIONS.forEachIndexed { index, (durationMillis, label) ->
+            val optionButton = TextView(this).apply {
+                text = label
+                textSize = 12f
+                typeface = Typeface.DEFAULT_BOLD
+                gravity = Gravity.CENTER
+                setPadding(dp(12), dp(8), dp(12), dp(8))
+                setOnClickListener {
+                    updateSelectedDuration(durationMillis)
+                }
+            }
+            optionButtons[durationMillis] = optionButton
+            durationWrap.addView(
+                optionButton,
+                LinearLayout.LayoutParams(
+                    LinearLayout.LayoutParams.WRAP_CONTENT,
+                    LinearLayout.LayoutParams.WRAP_CONTENT,
+                ).apply {
+                    if (index > 0) leftMargin = dp(8)
+                },
+            )
+        }
+        updateSelectedDuration(selectedBreakDurationMillis)
 
         holdButton.addView(
             holdFill,
@@ -279,6 +326,15 @@ class ZenoxOverlayService : Service() {
                 LinearLayout.LayoutParams.WRAP_CONTENT,
             ).apply {
                 topMargin = dp(16)
+            },
+        )
+        contentCard.addView(
+            durationWrap,
+            LinearLayout.LayoutParams(
+                LinearLayout.LayoutParams.MATCH_PARENT,
+                LinearLayout.LayoutParams.WRAP_CONTENT,
+            ).apply {
+                topMargin = dp(12)
             },
         )
         contentCard.addView(
@@ -348,6 +404,13 @@ class ZenoxOverlayService : Service() {
     companion object {
         private const val TAG = "ZenoxOverlayService"
         private const val EMERGENCY_HOLD_MS = 5_000L
+        private val BREAK_OPTIONS = listOf(
+            30_000L to "30s",
+            60_000L to "1m",
+            120_000L to "2m",
+            180_000L to "3m",
+            300_000L to "5m",
+        )
         private const val ACTION_SHOW = "com.zenox.engine.action.OVERLAY_SHOW"
         private const val ACTION_HIDE = "com.zenox.engine.action.OVERLAY_HIDE"
         private const val EXTRA_PACKAGE_NAME = "packageName"

@@ -19,6 +19,7 @@ import Animated, {
   FadeInDown,
   FadeInLeft,
   FadeInRight,
+  interpolateColor,
   runOnJS,
   useAnimatedStyle,
   useSharedValue,
@@ -96,7 +97,9 @@ export const HomeScreen = () => {
   const blockedApps = useZenStore((s) => s.blockedApps);
   const fetchBlockedApps = useZenStore((s) => s.fetchBlockedApps);
   const setBlockedApps = useZenStore((s) => s.setBlockedApps);
-  const colors = getThemeColors(status.isActive);
+  const [optimisticZen, setOptimisticZen] = useState(false);
+  const statusActiveRef = useRef(status.isActive);
+  const colors = getThemeColors(status.isActive || optimisticZen);
 
   const { height } = useWindowDimensions();
   const sheetHeight = Math.round(height * 0.75);
@@ -113,6 +116,10 @@ export const HomeScreen = () => {
 
   const sheetY = useSharedValue(sheetHeight);
   const backdropOpacity = useSharedValue(0);
+  const headerThemeProgress = useSharedValue(status.isActive ? 1 : 0);
+  const carouselThemeProgress = useSharedValue(status.isActive ? 1 : 0);
+  const statsThemeProgress = useSharedValue(status.isActive ? 1 : 0);
+  const ctaThemeProgress = useSharedValue(status.isActive ? 1 : 0);
   const sheetDragStartY = useRef(0);
   const modalScrollY = useRef(0);
 
@@ -135,6 +142,29 @@ export const HomeScreen = () => {
 
     loadName();
   }, []);
+
+  useEffect(() => {
+    statusActiveRef.current = status.isActive;
+    if (status.isActive) {
+      setOptimisticZen(false);
+    }
+  }, [status.isActive]);
+
+  const animateThemeCascade = useCallback(
+    (target: 0 | 1) => {
+      const duration = target === 1 ? 520 : 280;
+      const easing = target === 1 ? Easing.out(Easing.cubic) : Easing.inOut(Easing.quad);
+      headerThemeProgress.value = withDelay(0, withTiming(target, { duration, easing }));
+      carouselThemeProgress.value = withDelay(target === 1 ? 100 : 0, withTiming(target, { duration, easing }));
+      statsThemeProgress.value = withDelay(target === 1 ? 200 : 0, withTiming(target, { duration, easing }));
+      ctaThemeProgress.value = withDelay(target === 1 ? 300 : 0, withTiming(target, { duration, easing }));
+    },
+    [headerThemeProgress, carouselThemeProgress, ctaThemeProgress, statsThemeProgress]
+  );
+
+  useEffect(() => {
+    animateThemeCascade(status.isActive ? 1 : 0);
+  }, [animateThemeCascade, status.isActive]);
 
   useEffect(() => {
     if (!sheetSession) return;
@@ -171,6 +201,56 @@ export const HomeScreen = () => {
 
   const sheetStyle = useAnimatedStyle(() => ({
     transform: [{ translateY: sheetY.value }],
+  }));
+
+  const pageBackgroundStyle = useAnimatedStyle(() => ({
+    backgroundColor: interpolateColor(
+      headerThemeProgress.value,
+      [0, 1],
+      [Theme.colors.background, Theme.zenColors.background]
+    ),
+  }));
+
+  const headerSurfaceStyle = useAnimatedStyle(() => ({
+    backgroundColor: interpolateColor(
+      headerThemeProgress.value,
+      [0, 1],
+      [Theme.colors.surface, Theme.zenColors.surface]
+    ),
+    borderColor: interpolateColor(
+      headerThemeProgress.value,
+      [0, 1],
+      [Theme.colors.border, Theme.zenColors.border]
+    ),
+  }));
+
+  const statPrimaryStyle = useAnimatedStyle(() => ({
+    backgroundColor: interpolateColor(
+      statsThemeProgress.value,
+      [0, 1],
+      [Theme.colors.surface, Theme.zenColors.surface]
+    ),
+    borderColor: interpolateColor(
+      statsThemeProgress.value,
+      [0, 1],
+      [Theme.colors.border, Theme.zenColors.border]
+    ),
+  }));
+
+  const carouselSurfaceStyle = useAnimatedStyle(() => ({
+    backgroundColor: interpolateColor(
+      carouselThemeProgress.value,
+      [0, 1],
+      [Theme.colors.background, Theme.zenColors.background]
+    ),
+  }));
+
+  const ctaStyle = useAnimatedStyle(() => ({
+    backgroundColor: interpolateColor(
+      ctaThemeProgress.value,
+      [0, 1],
+      [Theme.colors.accent, Theme.zenColors.accent]
+    ),
   }));
 
   const saveName = async () => {
@@ -263,11 +343,22 @@ export const HomeScreen = () => {
     await syncBlockedAppsBeforeStart();
     if (status.isActive) {
       ZenoxEngine.stopZen();
+      closeSessionSheet();
     } else {
+      setOptimisticZen(true);
+      animateThemeCascade(1);
       ZenoxEngine.startZen(durationDraft * 60, fortressMode);
+      setTimeout(() => {
+        closeSessionSheet();
+      }, 360);
+      setTimeout(() => {
+        if (!statusActiveRef.current) {
+          setOptimisticZen(false);
+          animateThemeCascade(0);
+        }
+      }, 3000);
     }
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light).catch(() => undefined);
-    closeSessionSheet();
   };
 
   const startInstantZen = async () => {
@@ -328,7 +419,8 @@ export const HomeScreen = () => {
   );
 
   return (
-    <SafeAreaView style={[styles.container, { backgroundColor: colors.background }]} edges={['top']}>
+    <Animated.View style={[styles.container, pageBackgroundStyle]}>
+      <SafeAreaView style={styles.safeArea} edges={['top']}>
       <ScrollView contentContainerStyle={styles.content} showsVerticalScrollIndicator={false}>
         <Animated.View key={`header-${enterKey}`} entering={FadeInDown.duration(620)} style={styles.headerRow}>
           <View>
@@ -343,12 +435,12 @@ export const HomeScreen = () => {
             <Text style={[styles.headerSubtitle, { color: colors.mutedText }]}>Ready for a calm, focused session?</Text>
             <FocusQuote color={colors.mutedText} />
           </View>
-          <View style={[styles.headerIconWrap, { backgroundColor: colors.surface, borderColor: colors.border }]}>
+          <Animated.View style={[styles.headerIconWrap, headerSurfaceStyle]}>
             <Bell color={colors.text} size={18} />
-          </View>
+          </Animated.View>
         </Animated.View>
 
-        <Animated.View key={`carousel-${enterKey}`} entering={FadeInDown.duration(620).delay(80)}>
+        <Animated.View key={`carousel-${enterKey}`} entering={FadeInDown.duration(620).delay(80)} style={carouselSurfaceStyle}>
           <FlatList
             data={SESSIONS}
             horizontal
@@ -374,27 +466,29 @@ export const HomeScreen = () => {
         </Animated.View>
 
         <Animated.View key={`stats-${enterKey}`} entering={FadeInDown.duration(620).delay(160)} style={styles.bentleyGrid}>
-          <View style={[styles.primaryStatCard, { backgroundColor: colors.surface, borderColor: colors.border }]}>
+          <Animated.View style={[styles.primaryStatCard, statPrimaryStyle]}>
             <Text style={[styles.primaryStatValue, { color: colors.text }]}>{stats[0].value}</Text>
             <Text style={[styles.primaryStatLabel, { color: colors.mutedText }]}>{stats[0].label}</Text>
-          </View>
+          </Animated.View>
 
           <View style={styles.secondaryStatsCol}>
-            <View style={[styles.secondaryStatCard, { backgroundColor: colors.surface, borderColor: colors.border }]}>
+            <Animated.View style={[styles.secondaryStatCard, statPrimaryStyle]}>
               <Text style={[styles.secondaryStatValue, { color: colors.text }]}>{stats[1].value}</Text>
               <Text style={[styles.secondaryStatLabel, { color: colors.mutedText }]}>{stats[1].label}</Text>
-            </View>
-            <View style={[styles.secondaryStatCard, { backgroundColor: colors.surface, borderColor: colors.border }]}>
+            </Animated.View>
+            <Animated.View style={[styles.secondaryStatCard, statPrimaryStyle]}>
               <Text style={[styles.secondaryStatValue, { color: colors.text }]}>{stats[2].value}</Text>
               <Text style={[styles.secondaryStatLabel, { color: colors.mutedText }]}>{stats[2].label}</Text>
-            </View>
+            </Animated.View>
           </View>
         </Animated.View>
 
         <Animated.View key={`cta-${enterKey}`} entering={FadeInDown.duration(620).delay(240)}>
-          <TouchableOpacity style={[styles.instantButton, { backgroundColor: colors.accent }]} onPress={startInstantZen}>
+          <Animated.View style={[styles.instantButton, ctaStyle]}>
+            <TouchableOpacity style={styles.instantButtonTouch} onPress={startInstantZen}>
             <Text style={[styles.instantButtonText, { color: colors.text }]}>{status.isActive ? 'End Zen' : 'Instant Zen'}</Text>
-          </TouchableOpacity>
+            </TouchableOpacity>
+          </Animated.View>
         </Animated.View>
       </ScrollView>
 
@@ -512,12 +606,16 @@ export const HomeScreen = () => {
           </View>
         </View>
       </Modal>
-    </SafeAreaView>
+      </SafeAreaView>
+    </Animated.View>
   );
 };
 
 const styles = StyleSheet.create({
   container: {
+    flex: 1,
+  },
+  safeArea: {
     flex: 1,
   },
   content: {
@@ -616,6 +714,9 @@ const styles = StyleSheet.create({
     marginTop: 4,
     height: 56,
     borderRadius: Theme.radius.lg,
+  },
+  instantButtonTouch: {
+    flex: 1,
     alignItems: 'center',
     justifyContent: 'center',
   },

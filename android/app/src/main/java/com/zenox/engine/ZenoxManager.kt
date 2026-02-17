@@ -27,6 +27,8 @@ object ZenoxManager {
     private var notificationTickerJob: Job? = null
     @Volatile
     private var emergencyBreakUntilEpochMillis: Long = 0L
+    @Volatile
+    private var frozenRemainingMillis: Long? = null
 
     @Synchronized
     fun initialize(context: Context, dao: BlockedAppDao) {
@@ -98,6 +100,7 @@ object ZenoxManager {
         stopNotificationTicker()
         notificationManager?.cancel()
         emergencyBreakUntilEpochMillis = 0L
+        frozenRemainingMillis = null
     }
 
     @Synchronized
@@ -115,21 +118,47 @@ object ZenoxManager {
         notificationManager = null
         zenoxAlarmManager = ZenoxAlarmManager()
         emergencyBreakUntilEpochMillis = 0L
+        frozenRemainingMillis = null
     }
 
     @Synchronized
-    fun requestEmergencyBreak(nowMillis: Long = System.currentTimeMillis()) {
-        emergencyBreakUntilEpochMillis = nowMillis + EMERGENCY_BREAK_MS
-        Log.i(TAG, "ZENOX_ENGINE: Emergency break granted for 5 minutes until=$emergencyBreakUntilEpochMillis")
+    fun requestEmergencyBreak(
+        durationMillis: Long = EMERGENCY_BREAK_MS,
+        nowMillis: Long = System.currentTimeMillis(),
+    ) {
+        val safeDuration = durationMillis.coerceIn(30_000L, EMERGENCY_BREAK_MS)
+        val current = ZenoxState.getStatus()
+        if (current is ZenStatus.ACTIVE && frozenRemainingMillis == null) {
+            frozenRemainingMillis = (current.endTimeEpochMillis - nowMillis).coerceAtLeast(0L)
+        }
+        emergencyBreakUntilEpochMillis = nowMillis + safeDuration
+        Log.i(
+            TAG,
+            "ZENOX_ENGINE: Emergency break granted for ${safeDuration / 1000}s until=$emergencyBreakUntilEpochMillis, frozenRemainingMs=${frozenRemainingMillis ?: 0L}",
+        )
     }
 
     fun isEmergencyBreakActive(nowMillis: Long = System.currentTimeMillis()): Boolean {
         val active = nowMillis < emergencyBreakUntilEpochMillis
         if (!active && emergencyBreakUntilEpochMillis != 0L) {
+            resumeZenAfterBreak(nowMillis)
             Log.i(TAG, "Emergency break expired")
             emergencyBreakUntilEpochMillis = 0L
         }
         return active
+    }
+
+    @Synchronized
+    private fun resumeZenAfterBreak(nowMillis: Long) {
+        val remaining = frozenRemainingMillis ?: return
+        val status = ZenoxState.getStatus()
+        if (status is ZenStatus.ACTIVE) {
+            val resumedStatus = status.copy(endTimeEpochMillis = nowMillis + remaining)
+            ZenoxState.setStatus(resumedStatus)
+            startNotificationTicker()
+            Log.i(TAG, "ZENOX_ENGINE: Emergency break ended. Zen resumed with remainingMs=$remaining")
+        }
+        frozenRemainingMillis = null
     }
 
     @Synchronized
@@ -197,10 +226,16 @@ object ZenoxManager {
                     notificationManager?.cancel()
                     break
                 }
-                val remainingMillis = (status.endTimeEpochMillis - System.currentTimeMillis()).coerceAtLeast(0L)
+                val now = System.currentTimeMillis()
+                val breakActive = isEmergencyBreakActive(now)
+                val remainingMillis = if (breakActive) {
+                    frozenRemainingMillis ?: (status.endTimeEpochMillis - now).coerceAtLeast(0L)
+                } else {
+                    (status.endTimeEpochMillis - now).coerceAtLeast(0L)
+                }
                 val profileName = getActiveProfileName() ?: status.triggerType
                 notificationManager?.showOrUpdate(profileName, remainingMillis)
-                if (remainingMillis <= 0L) {
+                if (!breakActive && remainingMillis <= 0L) {
                     stopZen()
                     break
                 }

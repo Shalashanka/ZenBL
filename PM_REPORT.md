@@ -34,3 +34,23 @@ The project direction changed during development:
 - Style the native Kotlin blocking overlay in `android/app/src/main/java/com/zenox/engine/ZenoxOverlayService.kt` without changing engine behavior.
 - Wire true profile-specific native enforcement by consuming synced `active_profile_json` when Zen is started/enforced.
 - Add additional UI polish for tab visuals and wireframe refinement after functional structure is fully verified.
+
+## Update
+February 17, 2026
+
+### Stabilization + UX Improvements Implemented
+- Emergency break now freezes Zen countdown instead of letting the timer continue in background.
+- After break expires, Zen automatically resumes with the exact remaining time from before the break.
+- Block overlay break CTA changed to `Need a break?` with selectable break duration options:
+  - `30s`, `1m`, `2m`, `3m`, `5m`
+- Hold-to-unlock now applies the selected duration to the emergency break.
+- Home modal start flow now triggers Zen color transition before modal close, with a top-to-bottom staged animation.
+- Added optimistic fallback reset if Zen activation fails so UI does not stay in wrong color state.
+
+### Why This Matters
+- Preserves user trust: break means pause, not hidden countdown drain.
+- Gives controlled flexibility without disabling Zen entirely.
+- Improves perceived quality by synchronizing action feedback and theme transition.
+
+### Next Phase
+- Connect Home, Dashboard, and Settings to fully real native data (sessions, attempts, streaks, app-level stats) so all UI blocks reflect live engine state.

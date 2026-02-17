@@ -38,6 +38,9 @@
     "babel-preset-expo": "^54.0.10",
     "typescript": "~5.9.2"
   },
+  "overrides": {
+    "react-native-worklets": "0.5.1"
+  },
   "private": true,
   "codegenConfig": {
     "name": "NativeZenEngineSpec",
