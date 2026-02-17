@@ -9,6 +9,7 @@ import type { WeeklyStat } from '../bridge/ZenoxEngine';
 type FocusChartProps = {
   data: WeeklyStat[];
 };
+const CHART_MAX_BAR_HEIGHT = 128;
 
 export const FocusChart = memo(({ data }: FocusChartProps) => {
   const [selected, setSelected] = useState<WeeklyStat | null>(null);
@@ -22,7 +23,7 @@ export const FocusChart = memo(({ data }: FocusChartProps) => {
     <View>
       <View style={styles.row}>
         {data.map((item, index) => {
-          const heightPct = Math.max((item.minutes / maxMinutes) * 100, 8);
+          const heightPx = Math.max((item.minutes / maxMinutes) * CHART_MAX_BAR_HEIGHT, 10);
           return (
             <Pressable
               key={`${item.day}-${index}`}
@@ -32,7 +33,7 @@ export const FocusChart = memo(({ data }: FocusChartProps) => {
                 Haptics.selectionAsync().catch(() => undefined);
               }}
             >
-              <Animated.View entering={FadeInUp.delay(index * 100).duration(500)} style={[styles.barWrap, { height: `${heightPct}%` }]}>
+              <Animated.View entering={FadeInUp.delay(index * 100).duration(500)} style={[styles.barWrap, { height: heightPx }]}>
                 <LinearGradient
                   colors={[Theme.colors.accentLight, Theme.colors.accent, 'rgba(255,112,67,0.12)']}
                   start={{ x: 0.5, y: 0 }}

@@ -62,7 +62,8 @@ export const DashboardScreen = () => {
     return map;
   }, [installedApps]);
 
-  const effectiveStats = weeklyStats.length > 0 ? weeklyStats : FALLBACK_WEEK;
+  const hasWeeklyData = weeklyStats.some((item) => item.minutes > 0 || item.attempts > 0);
+  const effectiveStats = hasWeeklyData ? weeklyStats : FALLBACK_WEEK;
   const totalMinutes = effectiveStats.reduce((acc, item) => acc + item.minutes, 0);
   const currentStreak = Math.max(1, Math.round(totalMinutes / 120));
   const topBlocked = BLOCKED[0];
@@ -72,7 +73,7 @@ export const DashboardScreen = () => {
       <ScrollView contentContainerStyle={styles.content}>
         <Text style={[styles.title, { color: colors.text }]}>Your Reflections</Text>
 
-        {weeklyStats.length === 0 ? (
+        {!hasWeeklyData ? (
           <Animated.View
             key={`empty-${enterKey}`}
             entering={FadeInUp.delay(100).duration(500)}

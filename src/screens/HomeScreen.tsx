@@ -13,6 +13,7 @@ import {
   View,
   useWindowDimensions,
 } from 'react-native';
+import Svg, { Circle } from 'react-native-svg';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import Animated, {
   Easing,
@@ -87,9 +88,24 @@ const SESSIONS: Session[] = [
 ];
 
 const NAME_KEY = 'zenox_local_user_name';
+const QUICK_ZEN_MIN = 10;
+const QUICK_ZEN_MAX = 120;
+const QUICK_ZEN_STEP = 5;
+const TIMER_SIZE = 220;
+const TIMER_STROKE = 14;
+const TIMER_RADIUS = (TIMER_SIZE - TIMER_STROKE) / 2;
+const TIMER_CIRCUMFERENCE = 2 * Math.PI * TIMER_RADIUS;
 
 const prettyDuration = (mins: number) => `${mins} min`;
 const formatDuration = (mins: number) => `${mins} minutes`;
+const formatClock = (totalSeconds: number) => {
+  const safe = Math.max(0, Math.floor(totalSeconds));
+  const min = Math.floor(safe / 60)
+    .toString()
+    .padStart(2, '0');
+  const sec = (safe % 60).toString().padStart(2, '0');
+  return `${min}:${sec}`;
+};
 
 export const HomeScreen = () => {
   const navigation = useNavigation<any>();
@@ -108,6 +124,9 @@ export const HomeScreen = () => {
   const [nameDraft, setNameDraft] = useState('');
   const [isNameModalOpen, setNameModalOpen] = useState(false);
   const [streakDays] = useState(6);
+  const [quickZenMinutes, setQuickZenMinutes] = useState(60);
+  const [activeTotalSeconds, setActiveTotalSeconds] = useState(60 * 60);
+  const prevZenActiveRef = useRef(status.isActive);
 
   const [sheetSession, setSheetSession] = useState<Session | null>(null);
   const [durationDraft, setDurationDraft] = useState(60);
@@ -149,6 +168,17 @@ export const HomeScreen = () => {
       setOptimisticZen(false);
     }
   }, [status.isActive]);
+
+  useEffect(() => {
+    const becameActive = !prevZenActiveRef.current && status.isActive;
+    if (becameActive) {
+      setActiveTotalSeconds(Math.max(status.remainingSeconds, quickZenMinutes * 60, 1));
+    }
+    if (status.isActive && status.remainingSeconds > activeTotalSeconds) {
+      setActiveTotalSeconds(status.remainingSeconds);
+    }
+    prevZenActiveRef.current = status.isActive;
+  }, [activeTotalSeconds, quickZenMinutes, status.isActive, status.remainingSeconds]);
 
   const animateThemeCascade = useCallback(
     (target: 0 | 1) => {
@@ -336,6 +366,45 @@ export const HomeScreen = () => {
     return true;
   }, []);
 
+  const applyQuickZenFromRatio = useCallback((ratio: number) => {
+    const clamped = Math.min(1, Math.max(0, ratio));
+    const raw = QUICK_ZEN_MIN + clamped * (QUICK_ZEN_MAX - QUICK_ZEN_MIN);
+    const stepped = Math.round(raw / QUICK_ZEN_STEP) * QUICK_ZEN_STEP;
+    setQuickZenMinutes(Math.min(QUICK_ZEN_MAX, Math.max(QUICK_ZEN_MIN, stepped)));
+  }, []);
+
+  const applyQuickZenFromDialPoint = useCallback((x: number, y: number) => {
+    const center = TIMER_SIZE / 2;
+    const dx = x - center;
+    const dy = y - center;
+    let radians = Math.atan2(dy, dx) + Math.PI / 2;
+    if (radians < 0) radians += Math.PI * 2;
+    const ratio = radians / (Math.PI * 2);
+    applyQuickZenFromRatio(ratio);
+  }, [applyQuickZenFromRatio]);
+
+  const dialPanResponder = useMemo(
+    () =>
+      PanResponder.create({
+        onStartShouldSetPanResponder: () => !status.isActive,
+        onMoveShouldSetPanResponder: () => !status.isActive,
+        onPanResponderGrant: (event) => {
+          applyQuickZenFromDialPoint(event.nativeEvent.locationX, event.nativeEvent.locationY);
+        },
+        onPanResponderMove: (event) => {
+          applyQuickZenFromDialPoint(event.nativeEvent.locationX, event.nativeEvent.locationY);
+        },
+      }),
+    [applyQuickZenFromDialPoint, status.isActive]
+  );
+
+  const nudgeQuickZen = useCallback((direction: -1 | 1) => {
+    setQuickZenMinutes((prev) => {
+      const next = prev + direction * QUICK_ZEN_STEP;
+      return Math.max(QUICK_ZEN_MIN, Math.min(QUICK_ZEN_MAX, next));
+    });
+  }, []);
+
   const startSelectedSession = async () => {
     if (!sheetSession) return;
     const ready = await ensureZenPrerequisites();
@@ -367,8 +436,20 @@ export const HomeScreen = () => {
     await syncBlockedAppsBeforeStart();
     if (status.isActive) {
       ZenoxEngine.stopZen();
+      setOptimisticZen(false);
+      animateThemeCascade(0);
     } else {
-      ZenoxEngine.startZen(60);
+      setOptimisticZen(true);
+      animateThemeCascade(1);
+      const durationSeconds = quickZenMinutes * 60;
+      setActiveTotalSeconds(durationSeconds);
+      ZenoxEngine.startZen(durationSeconds);
+      setTimeout(() => {
+        if (!statusActiveRef.current) {
+          setOptimisticZen(false);
+          animateThemeCascade(0);
+        }
+      }, 3000);
     }
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light).catch(() => undefined);
   };
@@ -417,6 +498,15 @@ export const HomeScreen = () => {
       }),
     [sheetY]
   );
+
+  const displayTotalSeconds = status.isActive ? Math.max(activeTotalSeconds, 1) : quickZenMinutes * 60;
+  const displayRemainingSeconds = status.isActive ? status.remainingSeconds : displayTotalSeconds;
+  const progressRatio = Math.min(1, Math.max(0, displayRemainingSeconds / displayTotalSeconds));
+  const dashOffset = TIMER_CIRCUMFERENCE * (1 - progressRatio);
+  const sliderRatio = (quickZenMinutes - QUICK_ZEN_MIN) / (QUICK_ZEN_MAX - QUICK_ZEN_MIN);
+  const dialAngle = sliderRatio * Math.PI * 2 - Math.PI / 2;
+  const knobX = TIMER_SIZE / 2 + TIMER_RADIUS * Math.cos(dialAngle);
+  const knobY = TIMER_SIZE / 2 + TIMER_RADIUS * Math.sin(dialAngle);
 
   return (
     <Animated.View style={[styles.container, pageBackgroundStyle]}>
@@ -484,10 +574,68 @@ export const HomeScreen = () => {
         </Animated.View>
 
         <Animated.View key={`cta-${enterKey}`} entering={FadeInDown.duration(620).delay(240)}>
-          <Animated.View style={[styles.instantButton, ctaStyle]}>
-            <TouchableOpacity style={styles.instantButtonTouch} onPress={startInstantZen}>
-            <Text style={[styles.instantButtonText, { color: colors.text }]}>{status.isActive ? 'End Zen' : 'Instant Zen'}</Text>
-            </TouchableOpacity>
+          <Animated.View style={[styles.timerCard, statPrimaryStyle]}>
+            <View style={styles.timerDialWrap} {...dialPanResponder.panHandlers}>
+              <Svg width={TIMER_SIZE} height={TIMER_SIZE} style={styles.timerSvg}>
+                <Circle
+                  cx={TIMER_SIZE / 2}
+                  cy={TIMER_SIZE / 2}
+                  r={TIMER_RADIUS}
+                  stroke={colors.border}
+                  strokeWidth={TIMER_STROKE}
+                  fill="transparent"
+                />
+                <Circle
+                  cx={TIMER_SIZE / 2}
+                  cy={TIMER_SIZE / 2}
+                  r={TIMER_RADIUS}
+                  stroke={colors.accent}
+                  strokeWidth={TIMER_STROKE}
+                  fill="transparent"
+                  strokeLinecap="round"
+                  strokeDasharray={`${TIMER_CIRCUMFERENCE} ${TIMER_CIRCUMFERENCE}`}
+                  strokeDashoffset={dashOffset}
+                  transform={`rotate(-90 ${TIMER_SIZE / 2} ${TIMER_SIZE / 2})`}
+                />
+                {!status.isActive ? (
+                  <Circle
+                    cx={knobX}
+                    cy={knobY}
+                    r={10}
+                    fill={colors.surface}
+                    stroke={colors.accent}
+                    strokeWidth={3}
+                  />
+                ) : null}
+              </Svg>
+              <View style={styles.timerCenter}>
+                <Text style={[styles.timerClock, { color: colors.text }]}>{formatClock(displayRemainingSeconds)}</Text>
+                <Text style={[styles.timerSubText, { color: colors.mutedText }]}>
+                  {status.isActive ? 'Zen in progress' : `${quickZenMinutes} min preset`}
+                </Text>
+              </View>
+            </View>
+
+            <View style={styles.sliderSection}>
+              <View style={styles.sliderHeaderRow}>
+                <Text style={[styles.sliderLabel, { color: colors.mutedText }]}>Drag the ring to set minutes</Text>
+                <Text style={[styles.sliderValue, { color: colors.text }]}>{quickZenMinutes}m</Text>
+              </View>
+              <View style={styles.sliderButtonsRow}>
+                <TouchableOpacity style={[styles.adjustBtn, { borderColor: colors.border }]} onPress={() => nudgeQuickZen(-1)} disabled={status.isActive}>
+                  <Text style={[styles.adjustBtnText, { color: colors.text }]}>-</Text>
+                </TouchableOpacity>
+                <TouchableOpacity style={[styles.adjustBtn, { borderColor: colors.border }]} onPress={() => nudgeQuickZen(1)} disabled={status.isActive}>
+                  <Text style={[styles.adjustBtnText, { color: colors.text }]}>+</Text>
+                </TouchableOpacity>
+              </View>
+            </View>
+
+            <Animated.View style={[styles.instantButton, ctaStyle]}>
+              <TouchableOpacity style={styles.instantButtonTouch} onPress={startInstantZen}>
+                <Text style={[styles.instantButtonText, { color: colors.text }]}>{status.isActive ? 'End Zen' : 'Start Zen'}</Text>
+              </TouchableOpacity>
+            </Animated.View>
           </Animated.View>
         </Animated.View>
       </ScrollView>
@@ -711,7 +859,7 @@ const styles = StyleSheet.create({
     fontSize: Theme.type.caption,
   },
   instantButton: {
-    marginTop: 4,
+    marginTop: Theme.spacing.md,
     height: 56,
     borderRadius: Theme.radius.lg,
   },
@@ -724,6 +872,54 @@ const styles = StyleSheet.create({
     fontSize: 16,
     fontWeight: '700',
     letterSpacing: 0.3,
+  },
+  timerCard: {
+    borderWidth: 1,
+    borderRadius: Theme.radius.xl,
+    padding: Theme.spacing.md,
+  },
+  timerDialWrap: {
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  timerSvg: {
+    transform: [{ rotate: '0deg' }],
+  },
+  timerCenter: {
+    position: 'absolute',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  timerClock: {
+    fontSize: 44,
+    fontWeight: '700',
+    letterSpacing: -1.4,
+  },
+  timerSubText: {
+    marginTop: 6,
+    fontSize: Theme.type.body,
+  },
+  sliderSection: {
+    marginTop: Theme.spacing.md,
+  },
+  sliderHeaderRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    marginBottom: 10,
+  },
+  sliderLabel: {
+    fontSize: Theme.type.body,
+    fontWeight: '600',
+  },
+  sliderValue: {
+    fontSize: Theme.type.body,
+    fontWeight: '700',
+  },
+  sliderButtonsRow: {
+    flexDirection: 'row',
+    gap: 12,
+    justifyContent: 'center',
   },
   sheetRoot: {
     flex: 1,
