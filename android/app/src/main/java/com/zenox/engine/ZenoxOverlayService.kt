@@ -3,6 +3,7 @@ package com.zenox.engine
 import android.app.Service
 import android.app.usage.UsageEvents
 import android.app.usage.UsageStatsManager
+import android.animation.ValueAnimator
 import android.content.Context
 import android.content.Intent
 import android.graphics.Color
@@ -22,6 +23,8 @@ import android.widget.FrameLayout
 import android.widget.LinearLayout
 import android.widget.TextView
 import java.util.Calendar
+import java.util.Locale
+import kotlin.random.Random
 
 class ZenoxOverlayService : Service() {
     private var windowManager: WindowManager? = null
@@ -31,6 +34,9 @@ class ZenoxOverlayService : Service() {
         ZenoxManager.requestEmergencyBreak()
         hideOverlay()
     }
+    private var showHoldHintRunnable: Runnable? = null
+    private var holdAnimator: ValueAnimator? = null
+    private var holdProgress = 0f
 
     override fun onBind(intent: Intent?): IBinder? = null
 
@@ -45,6 +51,8 @@ class ZenoxOverlayService : Service() {
 
     override fun onDestroy() {
         mainHandler.removeCallbacksAndMessages(null)
+        holdAnimator?.cancel()
+        holdAnimator = null
         hideOverlay()
         super.onDestroy()
     }
@@ -77,7 +85,9 @@ class ZenoxOverlayService : Service() {
     private fun createOverlayView(blockedPackageName: String?): View {
         val appDisplayName = resolveAppDisplayName(blockedPackageName)
         val blockedAttemptsToday = countBlockedAttemptsToday(blockedPackageName)
-        val quote = pickQuote(appDisplayName)
+        val quote = pickQuote()
+        val preservedMinutes = ZenoxManager.getActiveSessionElapsedMinutes()
+        val totalSavedMinutes = ZenoxManager.getTotalTimeSavedTodayMinutes()
 
         val bgColor = Color.parseColor("#1F2A22")
         val surfaceColor = Color.parseColor("#2A3A2F")
@@ -92,7 +102,7 @@ class ZenoxOverlayService : Service() {
             @Suppress("DEPRECATION")
             systemUiVisibility =
                 View.SYSTEM_UI_FLAG_LAYOUT_STABLE or
-                    View.SYSTEM_UI_FLAG_LAYOUT_FULLSCREEN or
+                View.SYSTEM_UI_FLAG_LAYOUT_FULLSCREEN or
                     View.SYSTEM_UI_FLAG_LAYOUT_HIDE_NAVIGATION
         }
 
@@ -121,15 +131,15 @@ class ZenoxOverlayService : Service() {
         }
 
         val title = TextView(this).apply {
-            text = "$appDisplayName is blocked"
+            text = "$appDisplayName is resting."
             setTextColor(textColor)
-            textSize = 26f
+            textSize = 24f
             typeface = Typeface.DEFAULT_BOLD
             setPadding(0, dp(14), 0, dp(8))
         }
 
         val subtitle = TextView(this).apply {
-            text = "Stay on your current path. This distraction can wait."
+            text = "You have preserved $preservedMinutes minutes of focus so far."
             setTextColor(mutedTextColor)
             textSize = 15f
             setLineSpacing(dp(2).toFloat(), 1.05f)
@@ -146,10 +156,18 @@ class ZenoxOverlayService : Service() {
         }
 
         val attemptsStat = TextView(this).apply {
-            text = "Blocked attempts today: $blockedAttemptsToday"
+            val suffix = if (blockedAttemptsToday == 1) "attempt" else "attempts"
+            text = "This is your $blockedAttemptsToday $suffix to open this app today."
             setTextColor(textColor)
             textSize = 14f
             typeface = Typeface.DEFAULT_BOLD
+        }
+
+        val savedStat = TextView(this).apply {
+            text = "Total time saved today: ${formatMinutesToHourMinute(totalSavedMinutes)}"
+            setTextColor(mutedTextColor)
+            textSize = 13f
+            setPadding(0, dp(6), 0, 0)
         }
 
         val quoteText = TextView(this).apply {
@@ -158,42 +176,97 @@ class ZenoxOverlayService : Service() {
             textSize = 13f
             setPadding(0, dp(8), 0, 0)
             setLineSpacing(dp(2).toFloat(), 1.06f)
+            typeface = Typeface.SERIF
         }
 
-        val button = TextView(this).apply {
-            text = "Need 5 Minutes?"
+        val holdHint = TextView(this).apply {
+            text = "Hold for 5 seconds to unlock"
+            setTextColor(mutedTextColor)
+            textSize = 12f
             gravity = Gravity.CENTER
-            setTextColor(textColor)
-            textSize = 16f
-            typeface = Typeface.DEFAULT_BOLD
-            setPadding(dp(16), dp(14), dp(16), dp(14))
+            alpha = 0f
+            setPadding(0, dp(8), 0, 0)
+        }
+
+        val holdButton = FrameLayout(this).apply {
+            background = GradientDrawable().apply {
+                shape = GradientDrawable.RECTANGLE
+                cornerRadius = dp(14).toFloat()
+                setColor(Color.TRANSPARENT)
+                setStroke(dp(1), accentColor)
+            }
+            minimumHeight = dp(52)
+            isClickable = true
+            isFocusable = true
+        }
+
+        val holdFill = View(this).apply {
             background = GradientDrawable().apply {
                 shape = GradientDrawable.RECTANGLE
                 cornerRadius = dp(14).toFloat()
                 setColor(accentColor)
             }
-            setOnClickListener {
-                ZenoxManager.requestEmergencyBreak()
-                hideOverlay()
-            }
-            setOnTouchListener { _, event ->
-                when (event.actionMasked) {
-                    MotionEvent.ACTION_DOWN -> {
-                        mainHandler.postDelayed(emergencyHoldRunnable, EMERGENCY_HOLD_MS)
-                        true
-                    }
+        }
 
-                    MotionEvent.ACTION_UP, MotionEvent.ACTION_CANCEL -> {
-                        mainHandler.removeCallbacks(emergencyHoldRunnable)
-                        false
-                    }
+        val holdLabel = TextView(this).apply {
+            text = "Need 5 Minutes? Hold to Unlock"
+            gravity = Gravity.CENTER
+            setTextColor(textColor)
+            textSize = 16f
+            typeface = Typeface.DEFAULT_BOLD
+            setPadding(dp(16), dp(14), dp(16), dp(14))
+        }
 
-                    else -> false
+        holdButton.addView(
+            holdFill,
+            FrameLayout.LayoutParams(0, FrameLayout.LayoutParams.MATCH_PARENT, Gravity.START),
+        )
+        holdButton.addView(
+            holdLabel,
+            FrameLayout.LayoutParams(
+                FrameLayout.LayoutParams.MATCH_PARENT,
+                FrameLayout.LayoutParams.WRAP_CONTENT,
+                Gravity.CENTER,
+            ),
+        )
+
+        holdButton.setOnTouchListener { _, event ->
+            when (event.actionMasked) {
+                MotionEvent.ACTION_DOWN -> {
+                    showHoldHintRunnable = Runnable {
+                        holdHint.animate().alpha(1f).setDuration(180).start()
+                    }
+                    mainHandler.postDelayed(showHoldHintRunnable!!, 1_000L)
+                    startHoldAnimation(holdButton, holdFill)
+                    true
                 }
+
+                MotionEvent.ACTION_UP, MotionEvent.ACTION_CANCEL -> {
+                    showHoldHintRunnable?.let { mainHandler.removeCallbacks(it) }
+                    showHoldHintRunnable = null
+                    holdHint.animate().alpha(0f).setDuration(140).start()
+                    resetHoldAnimation(holdFill)
+                    true
+                }
+
+                else -> false
+            }
+        }
+
+        val alternateAction = TextView(this).apply {
+            text = "Take 3 deep breaths instead"
+            gravity = Gravity.CENTER
+            setTextColor(mutedTextColor)
+            textSize = 13f
+            setPadding(0, dp(12), 0, 0)
+            setOnClickListener {
+                holdHint.text = "Inhale 4s - Hold 4s - Exhale 6s"
+                holdHint.alpha = 1f
             }
         }
 
         statsWrap.addView(attemptsStat)
+        statsWrap.addView(savedStat)
         statsWrap.addView(quoteText)
 
         contentCard.addView(statusPill)
@@ -209,14 +282,16 @@ class ZenoxOverlayService : Service() {
             },
         )
         contentCard.addView(
-            button,
+            holdButton,
             LinearLayout.LayoutParams(
                 LinearLayout.LayoutParams.MATCH_PARENT,
-                LinearLayout.LayoutParams.WRAP_CONTENT,
+                dp(56),
             ).apply {
                 topMargin = dp(18)
             },
         )
+        contentCard.addView(holdHint)
+        contentCard.addView(alternateAction)
 
         root.addView(
             contentCard,
@@ -347,15 +422,66 @@ class ZenoxOverlayService : Service() {
         }
     }
 
-    private fun pickQuote(appName: String): String {
+    private fun pickQuote(): String {
         val quotes = listOf(
             "Discipline is choosing what matters most.",
             "Attention is your most valuable currency.",
             "Calm focus compounds over time.",
             "A clear mind creates better work.",
+            "Small pauses protect big goals.",
         )
-        val index = kotlin.math.abs(appName.hashCode()) % quotes.size
-        return quotes[index]
+        return quotes[Random.nextInt(quotes.size)]
+    }
+
+    private fun startHoldAnimation(holdButton: View, holdFill: View) {
+        holdAnimator?.cancel()
+        val startProgress = holdProgress
+        holdAnimator = ValueAnimator.ofFloat(startProgress, 1f).apply {
+            duration = ((1f - startProgress) * EMERGENCY_HOLD_MS).toLong().coerceAtLeast(120L)
+            interpolator = android.view.animation.LinearInterpolator()
+            addUpdateListener { animator ->
+                holdProgress = animator.animatedValue as Float
+                val targetWidth = (holdButton.width * holdProgress).toInt()
+                holdFill.layoutParams = (holdFill.layoutParams as FrameLayout.LayoutParams).apply {
+                    width = targetWidth
+                }
+            }
+            doOnEnd {
+                if (holdProgress >= 0.999f) {
+                    mainHandler.post(emergencyHoldRunnable)
+                }
+            }
+        }
+        holdAnimator?.start()
+    }
+
+    private fun resetHoldAnimation(holdFill: View) {
+        holdAnimator?.cancel()
+        holdAnimator = null
+        holdProgress = 0f
+        holdFill.layoutParams = (holdFill.layoutParams as FrameLayout.LayoutParams).apply {
+            width = 0
+        }
+    }
+
+    private fun ValueAnimator.doOnEnd(block: () -> Unit) {
+        addListener(
+            object : android.animation.Animator.AnimatorListener {
+                override fun onAnimationStart(animation: android.animation.Animator) = Unit
+
+                override fun onAnimationEnd(animation: android.animation.Animator) = block()
+
+                override fun onAnimationCancel(animation: android.animation.Animator) = Unit
+
+                override fun onAnimationRepeat(animation: android.animation.Animator) = Unit
+            },
+        )
+    }
+
+    private fun formatMinutesToHourMinute(totalMinutes: Int): String {
+        val h = totalMinutes / 60
+        val m = totalMinutes % 60
+        return String.format(Locale.US, "%02d:%02d", h, m)
     }
 
     private fun dp(value: Int): Int {

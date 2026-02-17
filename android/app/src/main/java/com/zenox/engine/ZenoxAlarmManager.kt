@@ -4,11 +4,15 @@ import android.app.AlarmManager
 import android.app.PendingIntent
 import android.content.Context
 import android.content.Intent
+import android.os.Build
+import android.util.Log
 import java.util.Calendar
 
 class ZenoxAlarmManager(
     private val nowProvider: () -> Long = { System.currentTimeMillis() },
 ) {
+    private val tag = "ZenoxAlarmManager"
+
     fun scheduleNextAlarm(context: Context, schedule: ZenSchedule) {
         val alarmManager = context.getSystemService(Context.ALARM_SERVICE) as? AlarmManager ?: return
         val triggerAtMillis = computeNextTriggerAt(schedule, nowProvider())
@@ -24,11 +28,33 @@ class ZenoxAlarmManager(
             intent,
             PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE,
         )
-        alarmManager.setExactAndAllowWhileIdle(
-            AlarmManager.RTC_WAKEUP,
-            triggerAtMillis,
-            pendingIntent,
-        )
+
+        try {
+            if (canUseExactAlarms(alarmManager)) {
+                alarmManager.setExactAndAllowWhileIdle(
+                    AlarmManager.RTC_WAKEUP,
+                    triggerAtMillis,
+                    pendingIntent,
+                )
+                Log.i(tag, "Scheduled exact alarm id=${schedule.id} at=$triggerAtMillis")
+            } else {
+                // Graceful fallback when exact alarms are not permitted.
+                alarmManager.setAndAllowWhileIdle(
+                    AlarmManager.RTC_WAKEUP,
+                    triggerAtMillis,
+                    pendingIntent,
+                )
+                Log.w(tag, "Exact alarm not allowed. Scheduled inexact alarm id=${schedule.id} at=$triggerAtMillis")
+            }
+        } catch (securityException: SecurityException) {
+            // Final safeguard: never crash app due to exact alarm policy.
+            Log.w(tag, "Exact alarm permission denied. Falling back to inexact alarm.", securityException)
+            alarmManager.setAndAllowWhileIdle(
+                AlarmManager.RTC_WAKEUP,
+                triggerAtMillis,
+                pendingIntent,
+            )
+        }
     }
 
     fun cancelAlarm(context: Context, scheduleId: Long) {
@@ -93,5 +119,10 @@ class ZenoxAlarmManager(
             .mapNotNull { it.trim().toIntOrNull() }
             .filter { it in 1..7 }
             .toSet()
+    }
+
+    private fun canUseExactAlarms(alarmManager: AlarmManager): Boolean {
+        if (Build.VERSION.SDK_INT < Build.VERSION_CODES.S) return true
+        return alarmManager.canScheduleExactAlarms()
     }
 }

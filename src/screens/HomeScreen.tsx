@@ -1,5 +1,6 @@
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import {
+  Alert,
   FlatList,
   Image,
   Modal,
@@ -210,8 +211,55 @@ export const HomeScreen = () => {
     }
   }, [blockedApps, fetchBlockedApps, setBlockedApps]);
 
+  const ensureZenPrerequisites = useCallback(async (): Promise<boolean> => {
+    const [serviceEnabled, overlayAllowed] = await Promise.all([
+      ZenoxEngine.isServiceEnabled(),
+      ZenoxEngine.checkOverlayPermission(),
+    ]);
+
+    if (!serviceEnabled) {
+      Alert.alert(
+        'Accessibility Required',
+        'Enable Zenox Accessibility Service to enforce app blocking.',
+        [
+          { text: 'Cancel', style: 'cancel' },
+          { text: 'Open Settings', onPress: () => ZenoxEngine.openAccessibilitySettings() },
+        ],
+      );
+      return false;
+    }
+
+    if (!overlayAllowed) {
+      Alert.alert(
+        'Overlay Required',
+        'Allow overlay permission so the block screen can appear.',
+        [
+          { text: 'Cancel', style: 'cancel' },
+          { text: 'Open Settings', onPress: () => ZenoxEngine.requestOverlayPermission() },
+        ],
+      );
+      return false;
+    }
+
+    const notificationAllowed = await ZenoxEngine.checkNotificationPermission();
+    if (!notificationAllowed) {
+      Alert.alert(
+        'Notifications Disabled',
+        'Enable notifications to see the Zen countdown in your status bar.',
+        [
+          { text: 'Skip', style: 'cancel' },
+          { text: 'Open Settings', onPress: () => ZenoxEngine.requestNotificationPermission() },
+        ],
+      );
+    }
+
+    return true;
+  }, []);
+
   const startSelectedSession = async () => {
     if (!sheetSession) return;
+    const ready = await ensureZenPrerequisites();
+    if (!ready) return;
     await syncBlockedAppsBeforeStart();
     if (status.isActive) {
       ZenoxEngine.stopZen();
@@ -223,6 +271,8 @@ export const HomeScreen = () => {
   };
 
   const startInstantZen = async () => {
+    const ready = await ensureZenPrerequisites();
+    if (!ready) return;
     await syncBlockedAppsBeforeStart();
     if (status.isActive) {
       ZenoxEngine.stopZen();

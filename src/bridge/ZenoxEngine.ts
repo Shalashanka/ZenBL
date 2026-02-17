@@ -121,6 +121,24 @@ export const ZenoxEngine = {
     engine?.requestOverlayPermission();
   },
 
+  async checkNotificationPermission(): Promise<boolean> {
+    if (!engine?.checkNotificationPermission) return true;
+    return engine.checkNotificationPermission();
+  },
+
+  requestNotificationPermission(): void {
+    engine?.requestNotificationPermission?.();
+  },
+
+  async checkExactAlarmPermission(): Promise<boolean> {
+    if (!engine?.checkExactAlarmPermission) return true;
+    return engine.checkExactAlarmPermission();
+  },
+
+  requestExactAlarmPermission(): void {
+    engine?.requestExactAlarmPermission?.();
+  },
+
   async getWeeklyStats(): Promise<WeeklyStat[]> {
     if (!engine?.getWeeklyStats) return [];
     const result = await engine.getWeeklyStats();

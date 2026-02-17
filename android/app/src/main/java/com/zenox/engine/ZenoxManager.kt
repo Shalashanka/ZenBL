@@ -23,6 +23,8 @@ object ZenoxManager {
     private var usageTracker: UsageTracker? = null
     private var appContext: Context? = null
     private var zenoxAlarmManager: ZenoxAlarmManager = ZenoxAlarmManager()
+    private var notificationManager: ZenoxNotificationManager? = null
+    private var notificationTickerJob: Job? = null
     @Volatile
     private var emergencyBreakUntilEpochMillis: Long = 0L
 
@@ -33,8 +35,10 @@ object ZenoxManager {
         blockedAppDao = dao
         scheduleDao = AppDatabase.getInstance(context.applicationContext).zenScheduleDao()
         usageTracker = UsageTracker(context.applicationContext)
+        notificationManager = ZenoxNotificationManager(context.applicationContext)
         Log.i(TAG, "initialize called. daoReady=${blockedAppDao != null}")
         startHeartbeat()
+        resumeNotificationIfNeeded()
         refreshSchedules()
     }
 
@@ -51,6 +55,7 @@ object ZenoxManager {
         scheduleDao = schedules
         zenoxAlarmManager = alarms ?: ZenoxAlarmManager()
         appContext = context
+        notificationManager = context?.let { ZenoxNotificationManager(it.applicationContext) }
     }
 
     @Synchronized
@@ -66,7 +71,12 @@ object ZenoxManager {
         val requestedEnd = now + durationMillis
 
         val nextStatus = when (val current = ZenoxState.getStatus()) {
-            is ZenStatus.INACTIVE -> ZenStatus.ACTIVE(triggerType = triggerType, endTimeEpochMillis = requestedEnd)
+            is ZenStatus.INACTIVE ->
+                ZenStatus.ACTIVE(
+                    triggerType = triggerType,
+                    startTimeEpochMillis = now,
+                    endTimeEpochMillis = requestedEnd,
+                )
             is ZenStatus.ACTIVE -> {
                 // Never create a second session. Keep one active session and only extend end time.
                 current.copy(
@@ -76,6 +86,7 @@ object ZenoxManager {
         }
 
         ZenoxState.setStatus(nextStatus)
+        startNotificationTicker()
         Log.i(TAG, "ZENOX_ENGINE: Zen Started by $triggerType, durationMs=$durationMillis, nextStatus=$nextStatus")
         return nextStatus
     }
@@ -84,6 +95,8 @@ object ZenoxManager {
     fun stopZen() {
         Log.i(TAG, "stopZen called")
         ZenoxState.setStatus(ZenStatus.INACTIVE)
+        stopNotificationTicker()
+        notificationManager?.cancel()
         emergencyBreakUntilEpochMillis = 0L
     }
 
@@ -91,11 +104,15 @@ object ZenoxManager {
     fun shutdown() {
         Log.i(TAG, "shutdown called")
         heartbeatJob?.cancel()
+        notificationTickerJob?.cancel()
+        notificationTickerJob = null
         heartbeatJob = null
         blockedAppDao = null
         scheduleDao = null
         usageTracker = null
         appContext = null
+        notificationManager?.cancel()
+        notificationManager = null
         zenoxAlarmManager = ZenoxAlarmManager()
         emergencyBreakUntilEpochMillis = 0L
     }
@@ -168,6 +185,66 @@ object ZenoxManager {
             } ?: return@launch
             Log.i(TAG, "refreshSchedules scheduling id=${nearest.id} name=${nearest.name}")
             zenoxAlarmManager.scheduleNextAlarm(context, nearest)
+        }
+    }
+
+    private fun startNotificationTicker() {
+        if (notificationTickerJob?.isActive == true) return
+        notificationTickerJob = managerScope.launch {
+            while (isActive) {
+                val status = ZenoxState.getStatus()
+                if (status !is ZenStatus.ACTIVE) {
+                    notificationManager?.cancel()
+                    break
+                }
+                val remainingMillis = (status.endTimeEpochMillis - System.currentTimeMillis()).coerceAtLeast(0L)
+                val profileName = getActiveProfileName() ?: status.triggerType
+                notificationManager?.showOrUpdate(profileName, remainingMillis)
+                if (remainingMillis <= 0L) {
+                    stopZen()
+                    break
+                }
+                delay(1_000L)
+            }
+            notificationTickerJob = null
+        }
+    }
+
+    private fun stopNotificationTicker() {
+        notificationTickerJob?.cancel()
+        notificationTickerJob = null
+    }
+
+    private fun resumeNotificationIfNeeded() {
+        val status = ZenoxState.getStatus()
+        if (status is ZenStatus.ACTIVE) {
+            startNotificationTicker()
+        } else {
+            notificationManager?.cancel()
+        }
+    }
+
+    fun getActiveSessionElapsedMinutes(nowMillis: Long = System.currentTimeMillis()): Int {
+        val status = ZenoxState.getStatus()
+        if (status !is ZenStatus.ACTIVE) return 0
+        return ((nowMillis - status.startTimeEpochMillis).coerceAtLeast(0L) / 60_000L).toInt()
+    }
+
+    fun getTotalTimeSavedTodayMinutes(nowMillis: Long = System.currentTimeMillis()): Int {
+        return getActiveSessionElapsedMinutes(nowMillis)
+    }
+
+    fun getActiveProfileName(): String? {
+        val context = appContext ?: return null
+        return try {
+            val json = context
+                .getSharedPreferences("zenox_profile_sync", Context.MODE_PRIVATE)
+                .getString("active_profile_json", null)
+                ?: return null
+            val name = org.json.JSONObject(json).optString("name", "").trim()
+            name.ifBlank { null }
+        } catch (_: Exception) {
+            null
         }
     }
 }

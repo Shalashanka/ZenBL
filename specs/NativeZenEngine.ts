@@ -27,6 +27,10 @@ export interface Spec extends TurboModule {
     isServiceEnabled(): Promise<boolean>;
     checkOverlayPermission(): Promise<boolean>;
     requestOverlayPermission(): void;
+    checkNotificationPermission?(): Promise<boolean>;
+    requestNotificationPermission?(): void;
+    checkExactAlarmPermission?(): Promise<boolean>;
+    requestExactAlarmPermission?(): void;
     setActiveProfile?(profileJson: string): void;
     getWeeklyStats?(): Promise<
         {

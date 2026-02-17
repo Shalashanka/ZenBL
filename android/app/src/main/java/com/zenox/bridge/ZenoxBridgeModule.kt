@@ -4,8 +4,10 @@ import android.content.Intent
 import android.content.Context
 import android.content.pm.ApplicationInfo
 import android.content.pm.PackageManager
+import android.app.AlarmManager
 import android.app.usage.UsageEvents
 import android.app.usage.UsageStatsManager
+import android.os.Build
 import android.net.Uri
 import android.provider.Settings
 import android.util.Log
@@ -349,6 +351,56 @@ class ZenoxBridgeModule(
             reactApplicationContext.startActivity(intent)
         } catch (exception: Exception) {
             Log.e(TAG, "requestOverlayPermission failed", exception)
+        }
+    }
+
+    @ReactMethod
+    fun checkNotificationPermission(promise: Promise) {
+        if (Build.VERSION.SDK_INT < Build.VERSION_CODES.TIRAMISU) {
+            promise.resolve(true)
+            return
+        }
+        val granted = reactApplicationContext.checkSelfPermission(android.Manifest.permission.POST_NOTIFICATIONS) ==
+            PackageManager.PERMISSION_GRANTED
+        promise.resolve(granted)
+    }
+
+    @ReactMethod
+    fun requestNotificationPermission() {
+        try {
+            val intent = Intent(Settings.ACTION_APP_NOTIFICATION_SETTINGS).apply {
+                putExtra(Settings.EXTRA_APP_PACKAGE, reactApplicationContext.packageName)
+                addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+            }
+            reactApplicationContext.startActivity(intent)
+        } catch (exception: Exception) {
+            Log.e(TAG, "requestNotificationPermission failed", exception)
+        }
+    }
+
+    @ReactMethod
+    fun checkExactAlarmPermission(promise: Promise) {
+        if (Build.VERSION.SDK_INT < Build.VERSION_CODES.S) {
+            promise.resolve(true)
+            return
+        }
+        val alarmManager = reactApplicationContext.getSystemService(Context.ALARM_SERVICE) as? AlarmManager
+        promise.resolve(alarmManager?.canScheduleExactAlarms() == true)
+    }
+
+    @ReactMethod
+    fun requestExactAlarmPermission() {
+        if (Build.VERSION.SDK_INT < Build.VERSION_CODES.S) return
+        try {
+            val intent = Intent(
+                Settings.ACTION_REQUEST_SCHEDULE_EXACT_ALARM,
+                Uri.parse("package:${reactApplicationContext.packageName}"),
+            ).apply {
+                addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+            }
+            reactApplicationContext.startActivity(intent)
+        } catch (exception: Exception) {
+            Log.e(TAG, "requestExactAlarmPermission failed", exception)
         }
     }
 

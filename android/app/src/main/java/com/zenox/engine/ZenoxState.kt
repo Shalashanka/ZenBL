@@ -8,6 +8,7 @@ sealed class ZenStatus {
 
     data class ACTIVE(
         val triggerType: String,
+        val startTimeEpochMillis: Long,
         val endTimeEpochMillis: Long,
     ) : ZenStatus()
 }
@@ -16,6 +17,7 @@ object ZenoxState {
     private const val PREF_NAME = "zenox_state"
     private const val KEY_ACTIVE = "active"
     private const val KEY_TRIGGER = "trigger"
+    private const val KEY_START_TIME = "start_time"
     private const val KEY_END_TIME = "end_time"
 
     private val statusRef = AtomicReference<ZenStatus>(ZenStatus.INACTIVE)
@@ -48,12 +50,14 @@ object ZenoxState {
             is ZenStatus.INACTIVE -> {
                 editor.putBoolean(KEY_ACTIVE, false)
                 editor.remove(KEY_TRIGGER)
+                editor.remove(KEY_START_TIME)
                 editor.remove(KEY_END_TIME)
             }
 
             is ZenStatus.ACTIVE -> {
                 editor.putBoolean(KEY_ACTIVE, true)
                 editor.putString(KEY_TRIGGER, status.triggerType)
+                editor.putLong(KEY_START_TIME, status.startTimeEpochMillis)
                 editor.putLong(KEY_END_TIME, status.endTimeEpochMillis)
             }
         }
@@ -66,11 +70,16 @@ object ZenoxState {
         val active = prefs.getBoolean(KEY_ACTIVE, false)
         if (!active) return ZenStatus.INACTIVE
         val trigger = prefs.getString(KEY_TRIGGER, "UNKNOWN").orEmpty().ifBlank { "UNKNOWN" }
+        val startTime = prefs.getLong(KEY_START_TIME, 0L)
         val endTime = prefs.getLong(KEY_END_TIME, 0L)
         return if (endTime <= System.currentTimeMillis()) {
             ZenStatus.INACTIVE
         } else {
-            ZenStatus.ACTIVE(triggerType = trigger, endTimeEpochMillis = endTime)
+            ZenStatus.ACTIVE(
+                triggerType = trigger,
+                startTimeEpochMillis = if (startTime > 0L) startTime else System.currentTimeMillis(),
+                endTimeEpochMillis = endTime,
+            )
         }
     }
 }

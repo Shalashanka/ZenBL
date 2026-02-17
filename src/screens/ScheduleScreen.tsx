@@ -4,6 +4,7 @@ import DateTimePicker from '@react-native-community/datetimepicker';
 import { AppScanner } from '../services/AppScanner';
 import { useZenStore } from '../store/zenStore';
 import { useNavigation } from '@react-navigation/native';
+import { ZenoxEngine } from '../bridge/ZenoxEngine';
 
 export const ScheduleScreen = ({ onClose }: { onClose?: () => void }) => {
     const navigation = useNavigation<any>();
@@ -74,6 +75,18 @@ export const ScheduleScreen = ({ onClose }: { onClose?: () => void }) => {
 
     const saveSchedule = async () => {
         try {
+            if (Platform.OS === 'android') {
+                const hasExactAlarm = await ZenoxEngine.checkExactAlarmPermission();
+                if (!hasExactAlarm) {
+                    ZenoxEngine.requestExactAlarmPermission();
+                    Alert.alert(
+                        'Exact Alarm Permission Required',
+                        'Please allow Exact Alarms in system settings, then come back and save the schedule again.',
+                    );
+                    return;
+                }
+            }
+
             const daysToSave = recurrenceType === 'daily' ? [0, 1, 2, 3, 4, 5, 6] : selectedDays;
 
             if (daysToSave.length === 0) {
