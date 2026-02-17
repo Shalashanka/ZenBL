@@ -31,7 +31,10 @@ export interface Spec extends TurboModule {
     requestNotificationPermission?(): void;
     checkExactAlarmPermission?(): Promise<boolean>;
     requestExactAlarmPermission?(): void;
+    setRingerMode?(mode: string): void;
     setActiveProfile?(profileJson: string): void;
+    fetchProfileBlockedApps?(profileId: string): Promise<Object[]>;
+    setProfileBlockedApps?(profileId: string, json: string): Promise<boolean>;
     getWeeklyStats?(): Promise<
         {
             day: string;

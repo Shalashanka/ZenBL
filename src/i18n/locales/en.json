@@ -1,0 +1,124 @@
+{
+  "common": {
+    "done": "Done",
+    "cancel": "Cancel",
+    "save": "Save",
+    "open": "Open",
+    "enable": "Enable",
+    "enabled": "Enabled",
+    "grant": "Grant",
+    "granted": "Granted",
+    "loading": "Loading...",
+    "start": "Start",
+    "end": "End",
+    "settings": "Settings",
+    "notifications": "Notifications",
+    "language": "Language",
+    "lightMode": "Light Mode"
+  },
+  "tabs": {
+    "home": "Home",
+    "dashboard": "Dashboard"
+  },
+  "stack": {
+    "manageApps": "Manage Apps",
+    "editSchedules": "Edit Schedules",
+    "commandCenter": "Command Center"
+  },
+  "home": {
+    "welcome": "Welcome",
+    "there": "there",
+    "quickZen": "Quick Zen",
+    "zenInProgress": "Zen in progress",
+    "minPreset": "{{minutes}} min",
+    "dragRing": "Drag the ring to set minutes",
+    "startZen": "Start Zen",
+    "endZen": "End Zen",
+    "focusTime": "Focus Time",
+    "appKills": "App Kills",
+    "goal": "Goal",
+    "thisWeek": "This week",
+    "blockedAppsCount": "{{count}} blocked apps",
+    "toGoal": "{{count}}% to weekly goal",
+    "globalBlockedApps": "Global Blocked Apps",
+    "appKillsWeek": "App kills this week: {{count}}",
+    "totalGlobalBlocked": "Total global blocked apps: {{count}}",
+    "noGlobalApps": "No apps in global blocked list yet.",
+    "focusDetails": "Focus Time Details",
+    "killsDetails": "App Kills Details",
+    "goalDetails": "Goal Details",
+    "goalProgress": "Weekly goal progress: {{value}}",
+    "goalPace": "Keep current pace for consistency.",
+    "dailyAvg": "Daily avg: {{count}}m",
+    "dailyTarget": "of daily target"
+  },
+  "menu": {
+    "accountControls": "Account & Controls",
+    "manageBlockedApps": "Manage Blocked Apps",
+    "schedules": "Schedules"
+  },
+  "profile": {
+    "sessionLength": "Session Length",
+    "blockedApps": "Blocked Apps",
+    "customize": "Customize",
+    "normal": "Normal",
+    "fortress": "Fortress",
+    "changeBlockedApps": "Change Blocked Apps",
+    "startSession": "Start Session",
+    "endSession": "End Session",
+    "audioMode": "Phone Audio",
+    "silencePhone": "Silence phone",
+    "vibrationOnly": "Vibration only"
+  },
+  "appList": {
+    "title": "Manage Blocked Apps",
+    "search": "Search apps..."
+  },
+  "schedule": {
+    "title": "Schedules",
+    "newZenSchedule": "New Zen Schedule",
+    "editSchedule": "Edit Schedule",
+    "appsSelected": "apps selected",
+    "selectApps": "Select Apps",
+    "selectAppsToBlock": "Select Apps to Block"
+  },
+  "alerts": {
+    "accessibilityRequiredTitle": "Accessibility Required",
+    "accessibilityRequiredBody": "Enable Zenox Accessibility Service to enforce app blocking.",
+    "overlayRequiredTitle": "Overlay Required",
+    "overlayRequiredBody": "Allow overlay permission so the block screen can appear.",
+    "notificationsDisabledTitle": "Notifications Disabled",
+    "notificationsDisabledBody": "Enable notifications to see the Zen countdown in your status bar.",
+    "openSettings": "Open Settings",
+    "skip": "Skip"
+  },
+  "nameModal": {
+    "welcome": "Welcome to Zenox",
+    "question": "What should we call you?",
+    "placeholder": "Your name",
+    "continue": "Continue"
+  },
+  "settings": {
+    "emergencyExitHint": "Allow ending sessions early"
+  },
+  "units": {
+    "minutes": "minutes",
+    "days": "days"
+  },
+  "dashboard": {
+    "title": "Your Reflections",
+    "focusMomentum": "Focus Momentum",
+    "timeSavedToday": "Time Saved Today",
+    "currentStreak": "Current Streak",
+    "mostBlocked": "Most Blocked",
+    "appGraveyard": "App Graveyard",
+    "noReflections": "No reflections yet. Start your first session.",
+    "noBlockedAttempts": "No blocked app attempts yet."
+  },
+  "quotes": {
+    "q1": "Focus is a practice, not a destination.",
+    "q2": "Small disciplined blocks create deep work.",
+    "q3": "Calm attention beats frantic effort.",
+    "q4": "Protect your focus and your time compounds."
+  }
+}

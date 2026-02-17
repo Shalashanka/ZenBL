@@ -1,6 +1,7 @@
 package com.zenox.engine
 
 import android.accessibilityservice.AccessibilityService
+import android.content.Context
 import android.util.Log
 import android.view.accessibility.AccessibilityEvent
 import kotlinx.coroutines.CoroutineScope
@@ -8,6 +9,7 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.cancel
 import kotlinx.coroutines.launch
+import org.json.JSONObject
 
 class ZenoxAccessibilityService : AccessibilityService() {
     private val serviceScope = CoroutineScope(SupervisorJob() + Dispatchers.Main.immediate)
@@ -19,7 +21,7 @@ class ZenoxAccessibilityService : AccessibilityService() {
         super.onCreate()
         appDatabase = AppDatabase.getInstance(this)
         ZenoxManager.initialize(this, appDatabase.blockedAppDao())
-        enforcer = ZenoxEnforcer(appDatabase.blockedAppDao())
+        enforcer = ZenoxEnforcer(this, appDatabase.blockedAppDao())
         Log.i(TAG, "Accessibility service created and initialized")
     }
 
@@ -76,18 +78,24 @@ class ZenoxAccessibilityService : AccessibilityService() {
 }
 
 class ZenoxEngine(
+    private val context: Context,
     private val blockedAppDao: BlockedAppDao,
 ) {
     suspend fun isBlocked(packageName: String): Boolean = kotlinx.coroutines.withContext(Dispatchers.IO) {
+        val activeProfileBlocked = readActiveProfileBlockedPackages(context)
+        if (activeProfileBlocked.isNotEmpty()) {
+            return@withContext activeProfileBlocked.contains(packageName)
+        }
         blockedAppDao.getByPackageName(packageName)?.isBlocked == true
     }
 }
 
 class ZenoxEnforcer(
+    private val context: Context,
     private val blockedAppDao: BlockedAppDao,
 ) {
     private val tag = "ZenoxEnforcer"
-    private val engine = ZenoxEngine(blockedAppDao)
+    private val engine = ZenoxEngine(context, blockedAppDao)
 
     suspend fun shouldEnforce(packageName: String?): Boolean {
         val normalizedPackage = packageName?.trim().takeUnless { it.isNullOrEmpty() } ?: return false
@@ -108,6 +116,25 @@ class ZenoxEnforcer(
         val blocked = engine.isBlocked(normalizedPackage)
         Log.d(tag, "Enforcement check package=$normalizedPackage blocked=$blocked trigger=${status.triggerType}")
         return blocked
+    }
+}
+
+private fun readActiveProfileBlockedPackages(context: Context): Set<String> {
+    return try {
+        val raw = context
+            .getSharedPreferences("zenox_profile_sync", Context.MODE_PRIVATE)
+            .getString("active_profile_json", null)
+            ?: return emptySet()
+        val obj = JSONObject(raw)
+        val arr = obj.optJSONArray("blockedApps") ?: return emptySet()
+        buildSet {
+            for (i in 0 until arr.length()) {
+                val pkg = arr.optString(i).trim()
+                if (pkg.isNotEmpty()) add(pkg)
+            }
+        }
+    } catch (_: Exception) {
+        emptySet()
     }
 }
 

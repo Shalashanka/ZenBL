@@ -8,6 +8,7 @@ import { useZenoxStatus } from '../hooks/useZenoxStatus';
 import { DashboardSummary, TopBlockedApp, WeeklyStat, ZenoxEngine } from '../bridge/ZenoxEngine';
 import { FocusChart } from '../components/FocusChart';
 import { Theme, getThemeColors } from '../theme/Theme';
+import { useAppPreferences } from '../preferences/AppPreferencesContext';
 
 const FALLBACK_WEEK: WeeklyStat[] = [
   { day: 'Mon', minutes: 35, attempts: 6 },
@@ -21,7 +22,8 @@ const FALLBACK_WEEK: WeeklyStat[] = [
 
 export const DashboardScreen = () => {
   const status = useZenoxStatus();
-  const colors = getThemeColors(status.isActive);
+  const { t, themeMode } = useAppPreferences();
+  const colors = getThemeColors(status.isActive, themeMode);
 
   const [enterKey, setEnterKey] = useState(0);
   const [weeklyStats, setWeeklyStats] = useState<WeeklyStat[]>([]);
@@ -75,7 +77,7 @@ export const DashboardScreen = () => {
   return (
     <SafeAreaView style={[styles.container, { backgroundColor: colors.background }]} edges={['top']}>
       <ScrollView contentContainerStyle={styles.content}>
-        <Text style={[styles.title, { color: colors.text }]}>Your Reflections</Text>
+        <Text style={[styles.title, { color: colors.text }]}>{t('dashboard.title')}</Text>
 
         {!hasWeeklyData ? (
           <Animated.View
@@ -83,7 +85,7 @@ export const DashboardScreen = () => {
             entering={FadeInUp.delay(100).duration(500)}
             style={[styles.card, { backgroundColor: colors.surface, borderColor: colors.border }]}
           >
-            <Text style={[styles.emptyText, { color: colors.mutedText }]}>No reflections yet. Start your first session.</Text>
+            <Text style={[styles.emptyText, { color: colors.mutedText }]}>{t('dashboard.noReflections')}</Text>
           </Animated.View>
         ) : null}
 
@@ -92,7 +94,7 @@ export const DashboardScreen = () => {
           entering={FadeInUp.delay(100).duration(500)}
           style={[styles.card, { backgroundColor: colors.surface, borderColor: colors.border }]}
         >
-          <Text style={[styles.cardTitle, { color: colors.text }]}>Focus Momentum</Text>
+          <Text style={[styles.cardTitle, { color: colors.text }]}>{t('dashboard.focusMomentum')}</Text>
           <FocusChart data={effectiveStats} />
         </Animated.View>
 
@@ -102,7 +104,7 @@ export const DashboardScreen = () => {
             entering={FadeInUp.delay(200).duration(500)}
             style={[styles.largeCard, { backgroundColor: colors.surface, borderColor: colors.border }]}
           >
-            <Text style={[styles.cardTitle, { color: colors.text }]}>Time Saved Today</Text>
+            <Text style={[styles.cardTitle, { color: colors.text }]}>{t('dashboard.timeSavedToday')}</Text>
             <Text style={[styles.largeNumber, { color: colors.accent }]}>{summary?.todayMinutes ?? Math.round(totalMinutes * 0.55)}m</Text>
           </Animated.View>
 
@@ -112,8 +114,8 @@ export const DashboardScreen = () => {
               entering={FadeInUp.delay(300).duration(500)}
               style={[styles.smallCard, { backgroundColor: colors.surface, borderColor: colors.border }]}
             >
-              <Text style={[styles.smallLabel, { color: colors.mutedText }]}>Current Streak</Text>
-              <Text style={[styles.smallValue, { color: colors.text }]}>{currentStreak} days</Text>
+              <Text style={[styles.smallLabel, { color: colors.mutedText }]}>{t('dashboard.currentStreak')}</Text>
+              <Text style={[styles.smallValue, { color: colors.text }]}>{currentStreak} {t('units.days')}</Text>
             </Animated.View>
 
             <Animated.View
@@ -121,7 +123,7 @@ export const DashboardScreen = () => {
               entering={FadeInUp.delay(400).duration(500)}
               style={[styles.smallCard, { backgroundColor: colors.surface, borderColor: colors.border }]}
             >
-              <Text style={[styles.smallLabel, { color: colors.mutedText }]}>Most Blocked</Text>
+              <Text style={[styles.smallLabel, { color: colors.mutedText }]}>{t('dashboard.mostBlocked')}</Text>
               <View style={styles.topBlockedRow}>
                 {topBlockedItem && iconByAppName.get(topBlockedItem.appName.toLowerCase()) ? (
                   <Image
@@ -144,9 +146,9 @@ export const DashboardScreen = () => {
           entering={FadeInUp.delay(500).duration(500)}
           style={[styles.card, { backgroundColor: colors.surface, borderColor: colors.border }]}
         >
-          <Text style={[styles.cardTitle, { color: colors.text }]}>App Graveyard</Text>
+          <Text style={[styles.cardTitle, { color: colors.text }]}>{t('dashboard.appGraveyard')}</Text>
           {topBlocked.length === 0 ? (
-            <Text style={[styles.emptyText, { color: colors.mutedText }]}>No blocked app attempts yet.</Text>
+            <Text style={[styles.emptyText, { color: colors.mutedText }]}>{t('dashboard.noBlockedAttempts')}</Text>
           ) : null}
           {topBlocked.map((item) => {
             const maxAttempts = Math.max(topBlocked[0]?.attemptsWeek ?? 1, 1);

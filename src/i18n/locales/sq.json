@@ -1,0 +1,124 @@
+{
+  "common": {
+    "done": "Kryer",
+    "cancel": "Anulo",
+    "save": "Ruaj",
+    "start": "Nis",
+    "end": "Ndalo",
+    "settings": "Cil\u00ebsimet",
+    "notifications": "Njoftimet",
+    "language": "Gjuha",
+    "lightMode": "Modaliteti i ndritsh\u00ebm",
+    "open": "Open",
+    "enable": "Enable",
+    "enabled": "Enabled",
+    "grant": "Grant",
+    "granted": "Granted",
+    "loading": "Loading..."
+  },
+  "tabs": {
+    "home": "Kreu",
+    "dashboard": "Paneli"
+  },
+  "stack": {
+    "manageApps": "Menaxho Aplikacionet",
+    "editSchedules": "Ndrysho Orar\u00ebt",
+    "commandCenter": "Qendra e komand\u00ebs"
+  },
+  "home": {
+    "welcome": "Mir\u00eb se erdhe",
+    "quickZen": "Zen i shpejt\u00eb",
+    "zenInProgress": "Zen n\u00eb vazhdim",
+    "minPreset": "{{minutes}} min",
+    "dragRing": "T\u00ebrhiq unaz\u00ebn p\u00ebr minuta",
+    "startZen": "Nis Zen",
+    "endZen": "Mbyll Zen",
+    "focusTime": "Koha e fokusit",
+    "appKills": "Bllokime aplikacionesh",
+    "goal": "Q\u00ebllimi",
+    "thisWeek": "K\u00ebt\u00eb jav\u00eb",
+    "blockedAppsCount": "{{count}} aplikacione t\u00eb bllokuara",
+    "toGoal": "{{count}}% deri te q\u00ebllimi javor",
+    "globalBlockedApps": "Aplikacionet globale t\u00eb bllokuara",
+    "appKillsWeek": "Bllokime k\u00ebt\u00eb jav\u00eb: {{count}}",
+    "totalGlobalBlocked": "Gjithsej globale: {{count}}",
+    "noGlobalApps": "Nuk ka aplikacione globale t\u00eb bllokuara.",
+    "focusDetails": "Detajet e fokusit",
+    "killsDetails": "Detajet e bllokimeve",
+    "goalDetails": "Detajet e q\u00ebllimit",
+    "goalProgress": "Progresi javor: {{value}}",
+    "goalPace": "Vazhdo me k\u00ebt\u00eb rit\u00ebm.",
+    "dailyAvg": "Mesatarja ditore: {{count}}m",
+    "there": "there",
+    "dailyTarget": "of daily target"
+  },
+  "menu": {
+    "accountControls": "Llogaria & kontrollet",
+    "manageBlockedApps": "Menaxho bllokimet",
+    "schedules": "Orar\u00ebt"
+  },
+  "profile": {
+    "sessionLength": "Koh\u00ebzgjatja e sesionit",
+    "blockedApps": "Aplikacionet e bllokuara",
+    "customize": "P\u00ebrshtat",
+    "normal": "Normal",
+    "fortress": "Fortes\u00eb",
+    "changeBlockedApps": "Ndrysho aplikacionet",
+    "startSession": "Nis sesionin",
+    "endSession": "Mbyll sesionin",
+    "silencePhone": "Vendose telefonin pa z\u00eb",
+    "vibrationOnly": "Vet\u00ebm dridhje",
+    "audioMode": "Phone Audio"
+  },
+  "appList": {
+    "title": "Menaxho aplikacionet e bllokuara",
+    "search": "K\u00ebrko aplikacione..."
+  },
+  "schedule": {
+    "title": "Orar\u00ebt",
+    "newZenSchedule": "Orar i ri Zen",
+    "editSchedule": "Ndrysho orarin",
+    "appsSelected": "apps selected",
+    "selectApps": "Select Apps",
+    "selectAppsToBlock": "Select Apps to Block"
+  },
+  "dashboard": {
+    "title": "Reflektimet e tua",
+    "focusMomentum": "Ritmi i fokusit",
+    "timeSavedToday": "Koha e kursyer sot",
+    "currentStreak": "Seria aktuale",
+    "mostBlocked": "M\u00eb i bllokuari",
+    "appGraveyard": "Varreza e aplikacioneve",
+    "noReflections": "Nuk ka reflektime ende. Nise sesionin t\u00ebnd.",
+    "noBlockedAttempts": "Nuk ka tentativa t\u00eb bllokuara ende."
+  },
+  "quotes": {
+    "q1": "Fokusi \u00ebsht\u00eb praktik\u00eb, jo destinacion.",
+    "q2": "Blloqet e vogla krijojn\u00eb pun\u00eb t\u00eb thell\u00eb.",
+    "q3": "Qet\u00ebsia mund nxitimin.",
+    "q4": "Mbro fokusin dhe koha shum\u00ebfishohet."
+  },
+  "alerts": {
+    "accessibilityRequiredTitle": "Accessibility Required",
+    "accessibilityRequiredBody": "Enable Zenox Accessibility Service to enforce app blocking.",
+    "overlayRequiredTitle": "Overlay Required",
+    "overlayRequiredBody": "Allow overlay permission so the block screen can appear.",
+    "notificationsDisabledTitle": "Notifications Disabled",
+    "notificationsDisabledBody": "Enable notifications to see the Zen countdown in your status bar.",
+    "openSettings": "Open Settings",
+    "skip": "Skip"
+  },
+  "nameModal": {
+    "welcome": "Welcome to Zenox",
+    "question": "What should we call you?",
+    "placeholder": "Your name",
+    "continue": "Continue"
+  },
+  "settings": {
+    "emergencyExitHint": "Allow ending sessions early"
+  },
+  "units": {
+    "minutes": "minutes",
+    "days": "days"
+  }
+}

@@ -38,6 +38,12 @@ export type SessionHistoryItem = {
   source: string;
 };
 
+export type BlockedAppPayload = {
+  packageName: string;
+  appName: string;
+  iconBase64?: string;
+};
+
 export type ZenProfilePayload = {
   id: number;
   name: string;
@@ -52,6 +58,9 @@ const engine = NativeZenEngine as (typeof NativeZenEngine & {
   getDashboardSummary?: () => Promise<DashboardSummary>;
   getTopBlockedApps?: (limit: number) => Promise<TopBlockedApp[]>;
   getSessionHistory?: (days: number) => Promise<SessionHistoryItem[]>;
+  fetchProfileBlockedApps?: (profileId: string) => Promise<BlockedAppPayload[]>;
+  setProfileBlockedApps?: (profileId: string, json: string) => Promise<boolean>;
+  setRingerMode?: (mode: string) => void;
 }) | null;
 
 export const ZenoxEngine = {
@@ -198,6 +207,21 @@ export const ZenoxEngine = {
     if (!engine?.getSessionHistory) return [];
     const result = await engine.getSessionHistory(days);
     return Array.isArray(result) ? result : [];
+  },
+
+  async fetchProfileBlockedApps(profileId: string): Promise<BlockedAppPayload[]> {
+    if (!engine?.fetchProfileBlockedApps) return [];
+    const result = (await engine.fetchProfileBlockedApps(profileId)) as BlockedAppPayload[];
+    return Array.isArray(result) ? result : [];
+  },
+
+  async setProfileBlockedApps(profileId: string, json: string): Promise<boolean> {
+    if (!engine?.setProfileBlockedApps) return false;
+    return engine.setProfileBlockedApps(profileId, json);
+  },
+
+  setRingerMode(mode: 'normal' | 'silent' | 'vibrate'): void {
+    engine?.setRingerMode?.(mode);
   },
 
   setActiveProfile(profile: ZenProfilePayload): void {

@@ -1,5 +1,5 @@
 import React, { useEffect } from 'react';
-import { Pressable, StyleSheet, Text, View, ImageBackground } from 'react-native';
+import { Pressable, StyleSheet, Text, View, ImageBackground, Image } from 'react-native';
 import Animated, { Easing, useAnimatedStyle, useSharedValue, withSequence, withTiming } from 'react-native-reanimated';
 import { Focus, MoonStar, ShieldBan, Timer } from 'lucide-react-native';
 import { LinearGradient } from 'expo-linear-gradient';
@@ -11,6 +11,8 @@ type FocusCardProps = {
   title: string;
   description: string;
   durationLabel: string;
+  blockedAppsCount: number;
+  blockedAppIcons: string[];
   icon: FocusIconName;
   imageUri: string;
   onPress: () => void;
@@ -26,7 +28,7 @@ const IconByName = ({ icon }: { icon: FocusIconName }) => {
   return <MoonStar color={color} size={ICON_SIZE} />;
 };
 
-export const FocusCard = ({ title, description, durationLabel, icon, imageUri, onPress }: FocusCardProps) => {
+export const FocusCard = ({ title, description, durationLabel, blockedAppsCount, blockedAppIcons, icon, imageUri, onPress }: FocusCardProps) => {
   const scale = useSharedValue(1);
   const iconScale = useSharedValue(1);
 
@@ -61,6 +63,9 @@ export const FocusCard = ({ title, description, durationLabel, icon, imageUri, o
     };
   }, [iconScale, scale]);
 
+  const topIcons = blockedAppIcons.slice(0, 3);
+  const extraCount = Math.max(0, blockedAppsCount - topIcons.length);
+
   return (
     <Pressable onPress={onPress} onPressIn={handlePressIn} onPressOut={handlePressOut}>
       <Animated.View style={[styles.card, cardStyle]}>
@@ -77,7 +82,34 @@ export const FocusCard = ({ title, description, durationLabel, icon, imageUri, o
               <Text style={styles.title} numberOfLines={1}>{title}</Text>
               <Text style={styles.description} numberOfLines={2}>{description}</Text>
             </View>
-            <Text style={styles.duration}>{durationLabel}</Text>
+            <View style={styles.footerRow}>
+              <View style={styles.footerLeft}>
+                <Text style={styles.duration}>{durationLabel}</Text>
+                <View style={styles.blockedMeta}>
+                  <View style={styles.stackWrap}>
+                    {[0, 1, 2].map((idx) => {
+                      const iconBase64 = topIcons[idx];
+                      return (
+                        <View key={`icon-${idx}`} style={[styles.stackDot, { left: idx * 10, zIndex: 3 - idx }]}>
+                          {iconBase64 ? (
+                            <Image source={{ uri: `data:image/png;base64,${iconBase64}` }} style={styles.stackDotImage} />
+                          ) : (
+                            <View style={styles.stackDotFallback} />
+                          )}
+                        </View>
+                      );
+                    })}
+                    {extraCount > 0 ? (
+                      <View style={[styles.stackPlusWrap, { left: 30 }]}>
+                        <Text style={styles.stackPlus}>+</Text>
+                      </View>
+                    ) : null}
+                  </View>
+                  <Text style={styles.blockedText}>{blockedAppsCount} apps</Text>
+                </View>
+              </View>
+              <View />
+            </View>
           </LinearGradient>
         </ImageBackground>
       </Animated.View>
@@ -135,5 +167,67 @@ const styles = StyleSheet.create({
     fontSize: Theme.type.body,
     fontWeight: '700',
     fontFamily: 'SNPro_Bold',
+  },
+  footerRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+  },
+  footerLeft: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+  },
+  blockedMeta: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+  },
+  stackWrap: {
+    width: 52,
+    height: 22,
+    position: 'relative',
+  },
+  stackDot: {
+    position: 'absolute',
+    width: 22,
+    height: 22,
+    borderRadius: 11,
+    borderWidth: 1,
+    borderColor: 'rgba(255,255,255,0.45)',
+    overflow: 'hidden',
+    backgroundColor: 'rgba(255,255,255,0.18)',
+  },
+  stackDotImage: {
+    width: '100%',
+    height: '100%',
+  },
+  stackDotFallback: {
+    flex: 1,
+    backgroundColor: 'rgba(255,255,255,0.26)',
+  },
+  stackPlusWrap: {
+    position: 'absolute',
+    top: 1,
+    width: 20,
+    height: 20,
+    borderRadius: 10,
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: 'rgba(0,0,0,0.52)',
+    borderWidth: 1,
+    borderColor: 'rgba(255,255,255,0.32)',
+    zIndex: 6,
+  },
+  stackPlus: {
+    color: '#FFFFFF',
+    fontFamily: 'SNPro_Bold',
+    fontSize: 12,
+    marginTop: -1,
+  },
+  blockedText: {
+    color: '#F2F5FB',
+    fontSize: 12,
+    fontFamily: 'SNPro_Regular',
   },
 });

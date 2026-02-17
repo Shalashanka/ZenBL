@@ -11,22 +11,41 @@ import {
   View,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
+import Animated, { FadeInDown, FadeInRight } from 'react-native-reanimated';
 import { useNavigation } from '@react-navigation/native';
 import { AppScanner, AppInfo } from '../services/AppScanner';
 import { useZenStore } from '../store/zenStore';
 import { useZenoxStatus } from '../hooks/useZenoxStatus';
 import { Theme, getThemeColors } from '../theme/Theme';
+import { useAppPreferences } from '../preferences/AppPreferencesContext';
 
-export const AppList = ({ onClose }: { onClose?: () => void }) => {
+type BlockedAppItem = {
+  packageName: string;
+  appName: string;
+  iconBase64?: string;
+};
+
+type AppListProps = {
+  onClose?: () => void;
+  selectedApps?: BlockedAppItem[];
+  onSaveSelectedApps?: (apps: BlockedAppItem[]) => void;
+  title?: string;
+};
+
+export const AppList = ({ onClose, selectedApps, onSaveSelectedApps, title }: AppListProps) => {
   const navigation = useNavigation<any>();
   const status = useZenoxStatus();
-  const colors = getThemeColors(status.isActive);
+  const { t, themeMode } = useAppPreferences();
+  const colors = getThemeColors(status.isActive, themeMode);
 
   const { installedApps, setInstalledApps, blockedApps, fetchBlockedApps, setBlockedApps } = useZenStore();
   const [searchText, setSearchText] = useState('');
   const [loading, setLoading] = useState(installedApps.length === 0);
 
-  const blockedSet = useMemo(() => new Set(blockedApps.map((a: any) => a.packageName)), [blockedApps]);
+  const isCustomSelectionMode = !!onSaveSelectedApps;
+  const [localSelection, setLocalSelection] = useState<BlockedAppItem[]>(selectedApps ?? []);
+  const effectiveSelectedApps = isCustomSelectionMode ? localSelection : blockedApps;
+  const blockedSet = useMemo(() => new Set(effectiveSelectedApps.map((a: any) => a.packageName)), [effectiveSelectedApps]);
 
   useEffect(() => {
     const load = async () => {
@@ -35,7 +54,9 @@ export const AppList = ({ onClose }: { onClose?: () => void }) => {
           const installed = await AppScanner.getInstalledApps();
           setInstalledApps(installed);
         }
-        await fetchBlockedApps();
+        if (!isCustomSelectionMode) {
+          await fetchBlockedApps();
+        }
       } catch (e) {
         console.error(e);
       } finally {
@@ -43,12 +64,18 @@ export const AppList = ({ onClose }: { onClose?: () => void }) => {
       }
     };
     load();
-  }, [fetchBlockedApps, installedApps.length, setInstalledApps]);
+  }, [fetchBlockedApps, installedApps.length, isCustomSelectionMode, setInstalledApps]);
+
+  useEffect(() => {
+    if (selectedApps) {
+      setLocalSelection(selectedApps);
+    }
+  }, [selectedApps]);
 
   const toggleAppBlock = useCallback(
     async (app: AppInfo, newValue: boolean) => {
       try {
-        let newBlockedList = [...blockedApps];
+        let newBlockedList = [...effectiveSelectedApps];
         if (newValue) {
           if (!newBlockedList.some((a: any) => a.packageName === app.packageName)) {
             newBlockedList.push({
@@ -60,12 +87,17 @@ export const AppList = ({ onClose }: { onClose?: () => void }) => {
         } else {
           newBlockedList = newBlockedList.filter((a: any) => a.packageName !== app.packageName);
         }
-        await setBlockedApps(newBlockedList);
+        if (isCustomSelectionMode) {
+          setLocalSelection(newBlockedList);
+          onSaveSelectedApps?.(newBlockedList);
+        } else {
+          await setBlockedApps(newBlockedList);
+        }
       } catch (e) {
         console.error('Failed to toggle app block:', e);
       }
     },
-    [blockedApps, setBlockedApps]
+    [effectiveSelectedApps, isCustomSelectionMode, onSaveSelectedApps, setBlockedApps]
   );
 
   const filteredApps = useMemo(
@@ -77,7 +109,7 @@ export const AppList = ({ onClose }: { onClose?: () => void }) => {
   const renderItem = ({ item }: { item: AppInfo }) => {
     const isBlocked = blockedSet.has(item.packageName);
     return (
-      <View style={styles.itemContainer}>
+      <Animated.View entering={FadeInRight.duration(320)} style={styles.itemContainer}>
         {item.icon ? (
           <Image source={{ uri: `data:image/png;base64,${item.icon}` }} style={styles.icon} />
         ) : (
@@ -97,25 +129,25 @@ export const AppList = ({ onClose }: { onClose?: () => void }) => {
           trackColor={{ false: '#4B5563', true: colors.accent }}
           thumbColor="#FFFFFF"
         />
-      </View>
+      </Animated.View>
     );
   };
 
   return (
     <SafeAreaView style={[styles.container, { backgroundColor: colors.background }]} edges={['top', 'bottom']}>
-      <View style={styles.header}>
-        <Text style={[styles.title, { color: colors.text }]}>Manage Blocked Apps</Text>
+      <Animated.View entering={FadeInDown.duration(340)} style={styles.header}>
+        <Text style={[styles.title, { color: colors.text }]}>{title ?? t('appList.title')}</Text>
         <TouchableOpacity
           onPress={() => (onClose ? onClose() : navigation.goBack())}
           style={[styles.closeButton, { borderColor: colors.border, backgroundColor: colors.surface }]}
         >
-          <Text style={[styles.closeText, { color: colors.text }]}>Done</Text>
+          <Text style={[styles.closeText, { color: colors.text }]}>{t('common.done')}</Text>
         </TouchableOpacity>
-      </View>
+      </Animated.View>
 
       <TextInput
         style={[styles.searchBar, { backgroundColor: colors.surface, borderColor: colors.border, color: colors.text }]}
-        placeholder="Search apps..."
+        placeholder={t('appList.search')}
         placeholderTextColor={colors.mutedText}
         value={searchText}
         onChangeText={setSearchText}

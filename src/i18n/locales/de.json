@@ -1,0 +1,124 @@
+{
+  "common": {
+    "done": "Fertig",
+    "cancel": "Abbrechen",
+    "save": "Speichern",
+    "start": "Start",
+    "end": "Beenden",
+    "settings": "Einstellungen",
+    "notifications": "Benachrichtigungen",
+    "language": "Sprache",
+    "lightMode": "Heller Modus",
+    "open": "Open",
+    "enable": "Enable",
+    "enabled": "Enabled",
+    "grant": "Grant",
+    "granted": "Granted",
+    "loading": "Loading..."
+  },
+  "tabs": {
+    "home": "Start",
+    "dashboard": "Dashboard"
+  },
+  "stack": {
+    "manageApps": "Apps verwalten",
+    "editSchedules": "Zeitpl\u00e4ne bearbeiten",
+    "commandCenter": "Steuerzentrale"
+  },
+  "home": {
+    "welcome": "Willkommen",
+    "quickZen": "Schnell-Zen",
+    "zenInProgress": "Zen l\u00e4uft",
+    "minPreset": "{{minutes}} Min",
+    "dragRing": "Ring ziehen f\u00fcr Minuten",
+    "startZen": "Zen starten",
+    "endZen": "Zen beenden",
+    "focusTime": "Fokuszeit",
+    "appKills": "App-Blockierungen",
+    "goal": "Ziel",
+    "thisWeek": "Diese Woche",
+    "blockedAppsCount": "{{count}} blockierte Apps",
+    "toGoal": "{{count}}% bis Wochenziel",
+    "globalBlockedApps": "Global blockierte Apps",
+    "appKillsWeek": "Blockierungen diese Woche: {{count}}",
+    "totalGlobalBlocked": "Global gesamt: {{count}}",
+    "noGlobalApps": "Noch keine global blockierten Apps.",
+    "focusDetails": "Fokus-Details",
+    "killsDetails": "Blockierungs-Details",
+    "goalDetails": "Ziel-Details",
+    "goalProgress": "Wochenfortschritt: {{value}}",
+    "goalPace": "Behalte dieses Tempo.",
+    "dailyAvg": "Tagesdurchschnitt: {{count}}m",
+    "there": "there",
+    "dailyTarget": "of daily target"
+  },
+  "menu": {
+    "accountControls": "Konto & Steuerung",
+    "manageBlockedApps": "Blockierte Apps verwalten",
+    "schedules": "Zeitpl\u00e4ne"
+  },
+  "profile": {
+    "sessionLength": "Sitzungsdauer",
+    "blockedApps": "Blockierte Apps",
+    "customize": "Anpassen",
+    "normal": "Normal",
+    "fortress": "Festung",
+    "changeBlockedApps": "Blockierte Apps \u00e4ndern",
+    "startSession": "Sitzung starten",
+    "endSession": "Sitzung beenden",
+    "silencePhone": "Telefon stumm",
+    "vibrationOnly": "Nur Vibration",
+    "audioMode": "Phone Audio"
+  },
+  "appList": {
+    "title": "Blockierte Apps verwalten",
+    "search": "Apps suchen..."
+  },
+  "schedule": {
+    "title": "Zeitpl\u00e4ne",
+    "newZenSchedule": "Neuer Zen-Zeitplan",
+    "editSchedule": "Zeitplan bearbeiten",
+    "appsSelected": "apps selected",
+    "selectApps": "Select Apps",
+    "selectAppsToBlock": "Select Apps to Block"
+  },
+  "dashboard": {
+    "title": "Deine Reflexionen",
+    "focusMomentum": "Fokus-Dynamik",
+    "timeSavedToday": "Heute gesparte Zeit",
+    "currentStreak": "Aktuelle Serie",
+    "mostBlocked": "Am meisten blockiert",
+    "appGraveyard": "App-Friedhof",
+    "noReflections": "Noch keine Reflexionen. Starte deine erste Sitzung.",
+    "noBlockedAttempts": "Noch keine blockierten Versuche."
+  },
+  "quotes": {
+    "q1": "Fokus ist eine Praxis, kein Ziel.",
+    "q2": "Kleine disziplinierte Bl\u00f6cke schaffen Tiefenarbeit.",
+    "q3": "Ruhige Aufmerksamkeit schl\u00e4gt Hektik.",
+    "q4": "Sch\u00fctze deinen Fokus, Zeit summiert sich."
+  },
+  "alerts": {
+    "accessibilityRequiredTitle": "Accessibility Required",
+    "accessibilityRequiredBody": "Enable Zenox Accessibility Service to enforce app blocking.",
+    "overlayRequiredTitle": "Overlay Required",
+    "overlayRequiredBody": "Allow overlay permission so the block screen can appear.",
+    "notificationsDisabledTitle": "Notifications Disabled",
+    "notificationsDisabledBody": "Enable notifications to see the Zen countdown in your status bar.",
+    "openSettings": "Open Settings",
+    "skip": "Skip"
+  },
+  "nameModal": {
+    "welcome": "Welcome to Zenox",
+    "question": "What should we call you?",
+    "placeholder": "Your name",
+    "continue": "Continue"
+  },
+  "settings": {
+    "emergencyExitHint": "Allow ending sessions early"
+  },
+  "units": {
+    "minutes": "minutes",
+    "days": "days"
+  }
+}

@@ -1,0 +1,124 @@
+{
+  "common": {
+    "done": "Conclu\u00eddo",
+    "cancel": "Cancelar",
+    "save": "Salvar",
+    "start": "Iniciar",
+    "end": "Encerrar",
+    "settings": "Configura\u00e7\u00f5es",
+    "notifications": "Notifica\u00e7\u00f5es",
+    "language": "Idioma",
+    "lightMode": "Modo claro",
+    "open": "Open",
+    "enable": "Enable",
+    "enabled": "Enabled",
+    "grant": "Grant",
+    "granted": "Granted",
+    "loading": "Loading..."
+  },
+  "tabs": {
+    "home": "In\u00edcio",
+    "dashboard": "Painel"
+  },
+  "stack": {
+    "manageApps": "Gerenciar apps",
+    "editSchedules": "Editar hor\u00e1rios",
+    "commandCenter": "Central de comando"
+  },
+  "home": {
+    "welcome": "Bem-vindo",
+    "quickZen": "Zen r\u00e1pido",
+    "zenInProgress": "Zen em andamento",
+    "minPreset": "{{minutes}} min",
+    "dragRing": "Arraste o anel",
+    "startZen": "Iniciar Zen",
+    "endZen": "Encerrar Zen",
+    "focusTime": "Tempo de foco",
+    "appKills": "Bloqueios de apps",
+    "goal": "Meta",
+    "thisWeek": "Esta semana",
+    "blockedAppsCount": "{{count}} apps bloqueados",
+    "toGoal": "{{count}}% para a meta semanal",
+    "globalBlockedApps": "Apps bloqueados globais",
+    "appKillsWeek": "Bloqueios nesta semana: {{count}}",
+    "totalGlobalBlocked": "Total global: {{count}}",
+    "noGlobalApps": "Nenhum app bloqueado global.",
+    "focusDetails": "Detalhes de foco",
+    "killsDetails": "Detalhes de bloqueio",
+    "goalDetails": "Detalhes da meta",
+    "goalProgress": "Progresso semanal: {{value}}",
+    "goalPace": "Mantenha esse ritmo.",
+    "dailyAvg": "M\u00e9dia di\u00e1ria: {{count}}m",
+    "there": "there",
+    "dailyTarget": "of daily target"
+  },
+  "menu": {
+    "accountControls": "Conta e controles",
+    "manageBlockedApps": "Gerenciar bloqueados",
+    "schedules": "Hor\u00e1rios"
+  },
+  "profile": {
+    "sessionLength": "Dura\u00e7\u00e3o da sess\u00e3o",
+    "blockedApps": "Apps bloqueados",
+    "customize": "Personalizar",
+    "normal": "Normal",
+    "fortress": "Fortaleza",
+    "changeBlockedApps": "Alterar apps bloqueados",
+    "startSession": "Iniciar sess\u00e3o",
+    "endSession": "Encerrar sess\u00e3o",
+    "silencePhone": "Silenciar telefone",
+    "vibrationOnly": "Somente vibra\u00e7\u00e3o",
+    "audioMode": "Phone Audio"
+  },
+  "appList": {
+    "title": "Gerenciar apps bloqueados",
+    "search": "Buscar apps..."
+  },
+  "schedule": {
+    "title": "Hor\u00e1rios",
+    "newZenSchedule": "Novo hor\u00e1rio Zen",
+    "editSchedule": "Editar hor\u00e1rio",
+    "appsSelected": "apps selected",
+    "selectApps": "Select Apps",
+    "selectAppsToBlock": "Select Apps to Block"
+  },
+  "dashboard": {
+    "title": "Suas reflex\u00f5es",
+    "focusMomentum": "Ritmo de foco",
+    "timeSavedToday": "Tempo economizado hoje",
+    "currentStreak": "Sequ\u00eancia atual",
+    "mostBlocked": "Mais bloqueado",
+    "appGraveyard": "Cemit\u00e9rio de apps",
+    "noReflections": "Ainda sem reflex\u00f5es. Inicie sua primeira sess\u00e3o.",
+    "noBlockedAttempts": "Ainda sem tentativas bloqueadas."
+  },
+  "quotes": {
+    "q1": "Foco \u00e9 pr\u00e1tica, n\u00e3o destino.",
+    "q2": "Blocos pequenos e disciplina geram trabalho profundo.",
+    "q3": "Aten\u00e7\u00e3o calma vence a pressa.",
+    "q4": "Proteja seu foco e o tempo se multiplica."
+  },
+  "alerts": {
+    "accessibilityRequiredTitle": "Accessibility Required",
+    "accessibilityRequiredBody": "Enable Zenox Accessibility Service to enforce app blocking.",
+    "overlayRequiredTitle": "Overlay Required",
+    "overlayRequiredBody": "Allow overlay permission so the block screen can appear.",
+    "notificationsDisabledTitle": "Notifications Disabled",
+    "notificationsDisabledBody": "Enable notifications to see the Zen countdown in your status bar.",
+    "openSettings": "Open Settings",
+    "skip": "Skip"
+  },
+  "nameModal": {
+    "welcome": "Welcome to Zenox",
+    "question": "What should we call you?",
+    "placeholder": "Your name",
+    "continue": "Continue"
+  },
+  "settings": {
+    "emergencyExitHint": "Allow ending sessions early"
+  },
+  "units": {
+    "minutes": "minutes",
+    "days": "days"
+  }
+}

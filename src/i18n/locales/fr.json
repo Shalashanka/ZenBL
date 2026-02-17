@@ -1,0 +1,124 @@
+{
+  "common": {
+    "done": "Termin\u00e9",
+    "cancel": "Annuler",
+    "save": "Enregistrer",
+    "start": "D\u00e9marrer",
+    "end": "Arr\u00eater",
+    "settings": "Param\u00e8tres",
+    "notifications": "Notifications",
+    "language": "Langue",
+    "lightMode": "Mode clair",
+    "open": "Open",
+    "enable": "Enable",
+    "enabled": "Enabled",
+    "grant": "Grant",
+    "granted": "Granted",
+    "loading": "Loading..."
+  },
+  "tabs": {
+    "home": "Accueil",
+    "dashboard": "Tableau"
+  },
+  "stack": {
+    "manageApps": "G\u00e9rer les apps",
+    "editSchedules": "Modifier les horaires",
+    "commandCenter": "Centre de commande"
+  },
+  "home": {
+    "welcome": "Bienvenue",
+    "quickZen": "Zen rapide",
+    "zenInProgress": "Zen en cours",
+    "minPreset": "{{minutes}} min",
+    "dragRing": "Faites glisser l'anneau",
+    "startZen": "D\u00e9marrer Zen",
+    "endZen": "Arr\u00eater Zen",
+    "focusTime": "Temps de focus",
+    "appKills": "Blocages d'apps",
+    "goal": "Objectif",
+    "thisWeek": "Cette semaine",
+    "blockedAppsCount": "{{count}} apps bloqu\u00e9es",
+    "toGoal": "{{count}}% vers l'objectif hebdo",
+    "globalBlockedApps": "Apps bloqu\u00e9es globales",
+    "appKillsWeek": "Blocages cette semaine : {{count}}",
+    "totalGlobalBlocked": "Total global : {{count}}",
+    "noGlobalApps": "Aucune app bloqu\u00e9e globale.",
+    "focusDetails": "D\u00e9tails focus",
+    "killsDetails": "D\u00e9tails blocages",
+    "goalDetails": "D\u00e9tails objectif",
+    "goalProgress": "Progression hebdo : {{value}}",
+    "goalPace": "Gardez ce rythme.",
+    "dailyAvg": "Moyenne quotidienne : {{count}}m",
+    "there": "there",
+    "dailyTarget": "of daily target"
+  },
+  "menu": {
+    "accountControls": "Compte & contr\u00f4les",
+    "manageBlockedApps": "G\u00e9rer les apps bloqu\u00e9es",
+    "schedules": "Horaires"
+  },
+  "profile": {
+    "sessionLength": "Dur\u00e9e de session",
+    "blockedApps": "Apps bloqu\u00e9es",
+    "customize": "Personnaliser",
+    "normal": "Normal",
+    "fortress": "Forteresse",
+    "changeBlockedApps": "Changer les apps bloqu\u00e9es",
+    "startSession": "D\u00e9marrer la session",
+    "endSession": "Terminer la session",
+    "silencePhone": "Mode silencieux",
+    "vibrationOnly": "Vibreur uniquement",
+    "audioMode": "Phone Audio"
+  },
+  "appList": {
+    "title": "G\u00e9rer les apps bloqu\u00e9es",
+    "search": "Rechercher des apps..."
+  },
+  "schedule": {
+    "title": "Horaires",
+    "newZenSchedule": "Nouvel horaire Zen",
+    "editSchedule": "Modifier l'horaire",
+    "appsSelected": "apps selected",
+    "selectApps": "Select Apps",
+    "selectAppsToBlock": "Select Apps to Block"
+  },
+  "dashboard": {
+    "title": "Vos r\u00e9flexions",
+    "focusMomentum": "\u00c9lan de focus",
+    "timeSavedToday": "Temps gagn\u00e9 aujourd'hui",
+    "currentStreak": "S\u00e9rie actuelle",
+    "mostBlocked": "La plus bloqu\u00e9e",
+    "appGraveyard": "Cimeti\u00e8re d'apps",
+    "noReflections": "Aucune r\u00e9flexion pour l'instant. Lancez votre premi\u00e8re session.",
+    "noBlockedAttempts": "Aucune tentative bloqu\u00e9e."
+  },
+  "quotes": {
+    "q1": "Le focus est une pratique, pas une destination.",
+    "q2": "De petits blocs cr\u00e9ent un travail profond.",
+    "q3": "L'attention calme surpasse la pr\u00e9cipitation.",
+    "q4": "Prot\u00e9gez votre focus, le temps se cumule."
+  },
+  "alerts": {
+    "accessibilityRequiredTitle": "Accessibility Required",
+    "accessibilityRequiredBody": "Enable Zenox Accessibility Service to enforce app blocking.",
+    "overlayRequiredTitle": "Overlay Required",
+    "overlayRequiredBody": "Allow overlay permission so the block screen can appear.",
+    "notificationsDisabledTitle": "Notifications Disabled",
+    "notificationsDisabledBody": "Enable notifications to see the Zen countdown in your status bar.",
+    "openSettings": "Open Settings",
+    "skip": "Skip"
+  },
+  "nameModal": {
+    "welcome": "Welcome to Zenox",
+    "question": "What should we call you?",
+    "placeholder": "Your name",
+    "continue": "Continue"
+  },
+  "settings": {
+    "emergencyExitHint": "Allow ending sessions early"
+  },
+  "units": {
+    "minutes": "minutes",
+    "days": "days"
+  }
+}

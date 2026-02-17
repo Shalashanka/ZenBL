@@ -8,12 +8,14 @@ import { AppScanner } from '../services/AppScanner';
 import { useAccessibilityPermission } from '../hooks/useAccessibilityPermission';
 import { Theme, getThemeColors } from '../theme/Theme';
 import { useZenoxStatus } from '../hooks/useZenoxStatus';
+import { useAppPreferences } from '../preferences/AppPreferencesContext';
 
 export const SettingsScreen = () => {
   const navigation = useNavigation<any>();
   const { isServiceEnabled, openSettings } = useAccessibilityPermission();
   const status = useZenoxStatus();
-  const colors = getThemeColors(status.isActive);
+  const { t, themeMode } = useAppPreferences();
+  const colors = getThemeColors(status.isActive, themeMode);
 
   const [overlayAllowed, setOverlayAllowed] = useState(false);
   const [emergencyExit, setEmergencyExit] = useState(true);
@@ -41,7 +43,7 @@ export const SettingsScreen = () => {
 
   return (
     <SafeAreaView style={[styles.container, { backgroundColor: colors.background }]} edges={['top']}>
-      <Text style={[styles.title, { color: colors.text }]}>Command Center</Text>
+      <Text style={[styles.title, { color: colors.text }]}>{t('stack.commandCenter')}</Text>
 
       <Animated.View
         key={`group1-${enterKey}`}
@@ -49,12 +51,12 @@ export const SettingsScreen = () => {
         style={[styles.group, { backgroundColor: colors.surface, borderColor: colors.border }]}
       >
         <TouchableOpacity style={styles.row} onPress={() => navigation.navigate('AppList')}>
-          <Text style={[styles.rowText, { color: colors.text }]}>Manage Apps</Text>
-          <Text style={[styles.rowHint, { color: colors.accent }]}>Open</Text>
+          <Text style={[styles.rowText, { color: colors.text }]}>{t('stack.manageApps')}</Text>
+          <Text style={[styles.rowHint, { color: colors.accent }]}>{t('common.open')}</Text>
         </TouchableOpacity>
         <TouchableOpacity style={styles.row} onPress={() => navigation.navigate('Schedule')}>
-          <Text style={[styles.rowText, { color: colors.text }]}>Edit Schedules</Text>
-          <Text style={[styles.rowHint, { color: colors.accent }]}>Open</Text>
+          <Text style={[styles.rowText, { color: colors.text }]}>{t('stack.editSchedules')}</Text>
+          <Text style={[styles.rowHint, { color: colors.accent }]}>{t('common.open')}</Text>
         </TouchableOpacity>
       </Animated.View>
 
@@ -66,7 +68,7 @@ export const SettingsScreen = () => {
         <View style={styles.row}>
           <View>
             <Text style={[styles.rowText, { color: colors.text }]}>Emergency Exit</Text>
-            <Text style={[styles.subText, { color: colors.mutedText }]}>Allow ending sessions early</Text>
+            <Text style={[styles.subText, { color: colors.mutedText }]}>{t('settings.emergencyExitHint')}</Text>
           </View>
           <Switch
             value={emergencyExit}
@@ -85,20 +87,20 @@ export const SettingsScreen = () => {
         <View style={styles.row}>
           <Text style={[styles.rowText, { color: colors.text }]}>Accessibility</Text>
           {isServiceEnabled ? (
-            <Text style={[styles.okText, { color: Theme.colors.success }]}>Enabled</Text>
+            <Text style={[styles.okText, { color: Theme.colors.success }]}>{t('common.enabled')}</Text>
           ) : (
             <TouchableOpacity onPress={openSettings}>
-              <Text style={[styles.rowHint, { color: colors.accent }]}>Enable</Text>
+              <Text style={[styles.rowHint, { color: colors.accent }]}>{t('common.enable')}</Text>
             </TouchableOpacity>
           )}
         </View>
         <View style={styles.row}>
           <Text style={[styles.rowText, { color: colors.text }]}>Overlay</Text>
           {overlayAllowed ? (
-            <Text style={[styles.okText, { color: Theme.colors.success }]}>Granted</Text>
+            <Text style={[styles.okText, { color: Theme.colors.success }]}>{t('common.granted')}</Text>
           ) : (
             <TouchableOpacity onPress={() => AppScanner.requestOverlayPermission()}>
-              <Text style={[styles.rowHint, { color: colors.accent }]}>Grant</Text>
+              <Text style={[styles.rowHint, { color: colors.accent }]}>{t('common.grant')}</Text>
             </TouchableOpacity>
           )}
         </View>

@@ -5,13 +5,21 @@ import android.content.Context
 import android.content.pm.ApplicationInfo
 import android.content.pm.PackageManager
 import android.app.AlarmManager
+import android.media.AudioManager
 import android.app.usage.UsageEvents
 import android.app.usage.UsageStatsManager
 import android.os.Build
 import android.net.Uri
 import android.provider.Settings
 import android.util.Log
+import android.util.Base64
+import java.io.ByteArrayOutputStream
+import android.graphics.Bitmap
+import android.graphics.Canvas
+import android.graphics.drawable.BitmapDrawable
+import android.graphics.drawable.Drawable
 import com.google.gson.JsonParser
+import com.google.gson.JsonObject
 import com.facebook.react.bridge.Arguments
 import com.facebook.react.bridge.Promise
 import com.facebook.react.bridge.ReactApplicationContext
@@ -37,6 +45,9 @@ import kotlin.math.max
 class ZenoxBridgeModule(
     reactContext: ReactApplicationContext,
 ) : ReactContextBaseJavaModule(reactContext) {
+    private val profilePrefs by lazy {
+        reactApplicationContext.getSharedPreferences("zenox_profile_lists", Context.MODE_PRIVATE)
+    }
     private val bridgeScope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
     private val blockedAppDao by lazy {
         AppDatabase.getInstance(reactApplicationContext).blockedAppDao()
@@ -156,6 +167,8 @@ class ZenoxBridgeModule(
                         Arguments.createMap().apply {
                             putString("packageName", appInfo.packageName)
                             putString("appName", packageManager.getApplicationLabel(appInfo).toString())
+                            val iconDrawable = packageManager.getApplicationIcon(appInfo)
+                            putString("icon", drawableToBase64(iconDrawable))
                         },
                     )
                 }
@@ -406,6 +419,24 @@ class ZenoxBridgeModule(
     }
 
     @ReactMethod
+    fun setRingerMode(mode: String) {
+        try {
+            val audioManager = reactApplicationContext.getSystemService(Context.AUDIO_SERVICE) as? AudioManager
+                ?: return
+            val normalized = mode.trim().lowercase(Locale.US)
+            val targetMode = when (normalized) {
+                "silent" -> AudioManager.RINGER_MODE_SILENT
+                "vibrate" -> AudioManager.RINGER_MODE_VIBRATE
+                else -> AudioManager.RINGER_MODE_NORMAL
+            }
+            audioManager.ringerMode = targetMode
+            Log.i(TAG, "setRingerMode -> $normalized")
+        } catch (exception: Exception) {
+            Log.e(TAG, "setRingerMode failed", exception)
+        }
+    }
+
+    @ReactMethod
     fun setActiveProfile(profileJson: String) {
         try {
             reactApplicationContext
@@ -416,6 +447,66 @@ class ZenoxBridgeModule(
             Log.i(TAG, "Active profile synced to native engine context")
         } catch (exception: Exception) {
             Log.e(TAG, "setActiveProfile failed", exception)
+        }
+    }
+
+    @ReactMethod
+    fun fetchProfileBlockedApps(profileId: String, promise: Promise) {
+        bridgeScope.launch {
+            try {
+                val profileKey = profileId.trim()
+                if (profileKey.isBlank()) {
+                    promise.resolve(Arguments.createArray())
+                    return@launch
+                }
+                val root = readProfileBlockedRoot()
+                val array = root.getAsJsonArray(profileKey)
+                val result = Arguments.createArray()
+                array?.forEach { item ->
+                    val obj = item.takeIf { it.isJsonObject }?.asJsonObject ?: return@forEach
+                    val packageName = obj.get("packageName")?.asString?.trim().orEmpty()
+                    if (packageName.isBlank()) return@forEach
+                    val appName = obj.get("appName")?.asString?.trim().orEmpty().ifBlank { packageName }
+                    val iconBase64 = obj.get("iconBase64")?.asString?.trim().orEmpty()
+                    result.pushMap(
+                        Arguments.createMap().apply {
+                            putString("packageName", packageName)
+                            putString("appName", appName)
+                            putString("iconBase64", iconBase64)
+                        },
+                    )
+                }
+                promise.resolve(result)
+            } catch (exception: Exception) {
+                Log.e(TAG, "fetchProfileBlockedApps failed", exception)
+                promise.reject("FETCH_PROFILE_BLOCKED_APPS_FAILED", exception.message, exception)
+            }
+        }
+    }
+
+    @ReactMethod
+    fun setProfileBlockedApps(profileId: String, json: String, promise: Promise) {
+        bridgeScope.launch {
+            try {
+                val profileKey = profileId.trim()
+                if (profileKey.isBlank()) {
+                    promise.resolve(false)
+                    return@launch
+                }
+                val incoming = JsonParser.parseString(json).takeIf { it.isJsonArray }?.asJsonArray
+                    ?: com.google.gson.JsonArray()
+                val root = readProfileBlockedRoot().apply {
+                    add(profileKey, incoming)
+                }
+                val saved = profilePrefs
+                    .edit()
+                    .putString("profile_blocked_json", root.toString())
+                    .commit()
+                promise.resolve(saved)
+            } catch (exception: Exception) {
+                Log.e(TAG, "setProfileBlockedApps failed", exception)
+                promise.reject("SET_PROFILE_BLOCKED_APPS_FAILED", exception.message, exception)
+            }
         }
     }
 
@@ -646,6 +737,15 @@ class ZenoxBridgeModule(
         return "%02d:%02d".format(safeHour, safeMinute)
     }
 
+    private fun readProfileBlockedRoot(): JsonObject {
+        val raw = profilePrefs.getString("profile_blocked_json", "{}").orEmpty()
+        return try {
+            JsonParser.parseString(raw).takeIf { it.isJsonObject }?.asJsonObject ?: JsonObject()
+        } catch (_: Exception) {
+            JsonObject()
+        }
+    }
+
     private suspend fun queryDailyStats(days: Int): com.facebook.react.bridge.WritableArray {
         val usageManager = reactApplicationContext
             .getSystemService(Context.USAGE_STATS_SERVICE) as UsageStatsManager
@@ -714,4 +814,29 @@ class ZenoxBridgeModule(
             false
         }
     }
+
+    private fun drawableToBase64(drawable: Drawable?): String {
+        if (drawable == null) return ""
+        return try {
+            val bitmap = when (drawable) {
+                is BitmapDrawable -> drawable.bitmap
+                else -> {
+                    val width = if (drawable.intrinsicWidth > 0) drawable.intrinsicWidth else 96
+                    val height = if (drawable.intrinsicHeight > 0) drawable.intrinsicHeight else 96
+                    val bmp = Bitmap.createBitmap(width, height, Bitmap.Config.ARGB_8888)
+                    val canvas = Canvas(bmp)
+                    drawable.setBounds(0, 0, canvas.width, canvas.height)
+                    drawable.draw(canvas)
+                    bmp
+                }
+            }
+            val out = ByteArrayOutputStream()
+            bitmap.compress(Bitmap.CompressFormat.PNG, 100, out)
+            Base64.encodeToString(out.toByteArray(), Base64.NO_WRAP)
+        } catch (exception: Exception) {
+            Log.w(TAG, "drawableToBase64 failed", exception)
+            ""
+        }
+    }
 }
+

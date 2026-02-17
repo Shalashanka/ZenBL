@@ -1,19 +1,34 @@
-import React from 'react';
+import React, { useMemo } from 'react';
 import { NavigationContainer, DarkTheme } from '@react-navigation/native';
 import { useFonts, Manrope_500Medium, Manrope_700Bold, Manrope_800ExtraBold } from '@expo-google-fonts/manrope';
 import { AppNavigator } from './src/navigation/TabNavigator';
-import { Theme } from './src/theme/Theme';
+import { AppPreferencesProvider, useAppPreferences } from './src/preferences/AppPreferencesContext';
+import { getThemeColors } from './src/theme/Theme';
 
-const navTheme = {
-  ...DarkTheme,
-  colors: {
-    ...DarkTheme.colors,
-    background: Theme.colors.background,
-    card: Theme.colors.surface,
-    text: Theme.colors.text,
-    border: Theme.colors.border,
-    primary: Theme.colors.accent,
-  },
+const AppShell = () => {
+  const { themeMode } = useAppPreferences();
+  const colors = getThemeColors(false, themeMode);
+
+  const navTheme = useMemo(
+    () => ({
+      ...DarkTheme,
+      colors: {
+        ...DarkTheme.colors,
+        background: colors.background,
+        card: colors.surface,
+        text: colors.text,
+        border: colors.border,
+        primary: colors.accent,
+      },
+    }),
+    [colors.accent, colors.background, colors.border, colors.surface, colors.text],
+  );
+
+  return (
+    <NavigationContainer theme={navTheme}>
+      <AppNavigator />
+    </NavigationContainer>
+  );
 };
 
 export default function App() {
@@ -29,8 +44,8 @@ export default function App() {
   if (!fontsLoaded) return null;
 
   return (
-    <NavigationContainer theme={navTheme}>
-      <AppNavigator />
-    </NavigationContainer>
+    <AppPreferencesProvider>
+      <AppShell />
+    </AppPreferencesProvider>
   );
 }

@@ -1,0 +1,124 @@
+{
+  "common": {
+    "done": "Fatto",
+    "cancel": "Annulla",
+    "save": "Salva",
+    "open": "Apri",
+    "enable": "Abilita",
+    "enabled": "Abilitato",
+    "grant": "Concedi",
+    "granted": "Concesso",
+    "loading": "Caricamento...",
+    "start": "Avvia",
+    "end": "Termina",
+    "settings": "Impostazioni",
+    "notifications": "Notifiche",
+    "language": "Lingua",
+    "lightMode": "Tema chiaro"
+  },
+  "tabs": {
+    "home": "Home",
+    "dashboard": "Dashboard"
+  },
+  "stack": {
+    "manageApps": "Gestisci app",
+    "editSchedules": "Modifica pianificazioni",
+    "commandCenter": "Centro comandi"
+  },
+  "home": {
+    "welcome": "Benvenuto",
+    "there": "l\u00ec",
+    "quickZen": "Zen rapido",
+    "zenInProgress": "Zen in corso",
+    "minPreset": "{{minutes}} min",
+    "dragRing": "Trascina l'anello per impostare i minuti",
+    "startZen": "Avvia Zen",
+    "endZen": "Termina Zen",
+    "focusTime": "Tempo focus",
+    "appKills": "Blocchi app",
+    "goal": "Obiettivo",
+    "thisWeek": "Questa settimana",
+    "blockedAppsCount": "{{count}} app bloccate",
+    "toGoal": "{{count}}% al traguardo settimanale",
+    "globalBlockedApps": "App bloccate globali",
+    "appKillsWeek": "Blocchi questa settimana: {{count}}",
+    "totalGlobalBlocked": "Totale app globali: {{count}}",
+    "noGlobalApps": "Nessuna app bloccata nella lista globale.",
+    "focusDetails": "Dettagli focus",
+    "killsDetails": "Dettagli blocchi",
+    "goalDetails": "Dettagli obiettivo",
+    "goalProgress": "Progresso settimanale: {{value}}",
+    "goalPace": "Mantieni questo ritmo.",
+    "dailyAvg": "Media giornaliera: {{count}}m",
+    "dailyTarget": "del target giornaliero"
+  },
+  "menu": {
+    "accountControls": "Account e controlli",
+    "manageBlockedApps": "Gestisci app bloccate",
+    "schedules": "Pianificazioni"
+  },
+  "profile": {
+    "sessionLength": "Durata sessione",
+    "blockedApps": "App bloccate",
+    "customize": "Personalizza",
+    "normal": "Normale",
+    "fortress": "Fortezza",
+    "changeBlockedApps": "Cambia app bloccate",
+    "startSession": "Avvia sessione",
+    "endSession": "Termina sessione",
+    "audioMode": "Audio telefono",
+    "silencePhone": "Silenzia telefono",
+    "vibrationOnly": "Solo vibrazione"
+  },
+  "appList": {
+    "title": "Gestisci app bloccate",
+    "search": "Cerca app..."
+  },
+  "schedule": {
+    "title": "Pianificazioni",
+    "newZenSchedule": "Nuova pianificazione Zen",
+    "editSchedule": "Modifica pianificazione",
+    "appsSelected": "app selezionate",
+    "selectApps": "Seleziona app",
+    "selectAppsToBlock": "Seleziona app da bloccare"
+  },
+  "alerts": {
+    "accessibilityRequiredTitle": "Accessibilit\u00e0 richiesta",
+    "accessibilityRequiredBody": "Abilita il servizio di accessibilit\u00e0 Zenox per applicare i blocchi.",
+    "overlayRequiredTitle": "Overlay richiesto",
+    "overlayRequiredBody": "Consenti l'overlay per mostrare la schermata di blocco.",
+    "notificationsDisabledTitle": "Notifiche disattivate",
+    "notificationsDisabledBody": "Abilita le notifiche per vedere il conto alla rovescia di Zen.",
+    "openSettings": "Apri impostazioni",
+    "skip": "Salta"
+  },
+  "nameModal": {
+    "welcome": "Benvenuto in Zenox",
+    "question": "Come vuoi essere chiamato?",
+    "placeholder": "Il tuo nome",
+    "continue": "Continua"
+  },
+  "settings": {
+    "emergencyExitHint": "Consenti di terminare le sessioni in anticipo"
+  },
+  "units": {
+    "minutes": "minuti",
+    "days": "giorni"
+  },
+  "dashboard": {
+    "title": "Le tue riflessioni",
+    "focusMomentum": "Momentum focus",
+    "timeSavedToday": "Tempo risparmiato oggi",
+    "currentStreak": "Serie attuale",
+    "mostBlocked": "Pi\u00f9 bloccata",
+    "appGraveyard": "Cimitero app",
+    "noReflections": "Nessuna riflessione ancora. Avvia la prima sessione.",
+    "noBlockedAttempts": "Nessun tentativo bloccato ancora."
+  },
+  "quotes": {
+    "q1": "Il focus \u00e8 una pratica, non una destinazione.",
+    "q2": "Piccoli blocchi disciplinati creano deep work.",
+    "q3": "L'attenzione calma batte la fretta.",
+    "q4": "Proteggi il focus e il tempo si accumula."
+  }
+}

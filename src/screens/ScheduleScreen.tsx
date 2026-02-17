@@ -8,11 +8,13 @@ import { ZenoxEngine } from '../bridge/ZenoxEngine';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useZenoxStatus } from '../hooks/useZenoxStatus';
 import { getThemeColors } from '../theme/Theme';
+import { useAppPreferences } from '../preferences/AppPreferencesContext';
 
 export const ScheduleScreen = ({ onClose }: { onClose?: () => void }) => {
     const navigation = useNavigation<any>();
     const status = useZenoxStatus();
-    const colors = getThemeColors(status.isActive);
+    const { t, themeMode } = useAppPreferences();
+    const colors = getThemeColors(status.isActive, themeMode);
     const {
         schedules,
         fetchSchedules,
@@ -231,9 +233,9 @@ export const ScheduleScreen = ({ onClose }: { onClose?: () => void }) => {
     return (
         <SafeAreaView style={[styles.container, { backgroundColor: colors.background }]} edges={['top', 'bottom']}>
             <View style={styles.header}>
-                <Text style={[styles.title, { color: colors.text }]}>Schedules</Text>
+                <Text style={[styles.title, { color: colors.text }]}>{t('schedule.title')}</Text>
                 <TouchableOpacity onPress={() => (onClose ? onClose() : navigation.goBack())}>
-                    <Text style={[styles.closeText, { color: colors.text }]}>Done</Text>
+                    <Text style={[styles.closeText, { color: colors.text }]}>{t('common.done')}</Text>
                 </TouchableOpacity>
             </View>
 
@@ -250,7 +252,7 @@ export const ScheduleScreen = ({ onClose }: { onClose?: () => void }) => {
 
             <Modal visible={isModalVisible} animationType="slide" presentationStyle="pageSheet">
                 <SafeAreaView style={[styles.modalContent, { backgroundColor: colors.background }]} edges={['top', 'bottom']}>
-                    <Text style={[styles.modalTitle, { color: colors.text }]}>{editingId ? 'Edit Schedule' : 'New Zen Schedule'}</Text>
+                    <Text style={[styles.modalTitle, { color: colors.text }]}>{editingId ? t('schedule.editSchedule') : t('schedule.newZenSchedule')}</Text>
 
                     <Text style={[styles.label, { color: colors.text }]}>Schedule Name</Text>
                     <TextInput
@@ -319,10 +321,10 @@ export const ScheduleScreen = ({ onClose }: { onClose?: () => void }) => {
                         >
                             <Text style={[styles.selectAppsText, { color: colors.accent }]}>
                                 {appsLoading
-                                    ? 'Loading apps…'
+                                    ? t('common.loading')
                                     : specificApps.length > 0
-                                        ? `${specificApps.length} Apps Selected`
-                                        : 'Select Apps'}
+                                        ? `${specificApps.length} ${t('schedule.appsSelected')}`
+                                        : t('schedule.selectApps')}
                             </Text>
                         </TouchableOpacity>
                     )}
@@ -369,10 +371,10 @@ export const ScheduleScreen = ({ onClose }: { onClose?: () => void }) => {
 
                     <View style={styles.actionRow}>
                         <TouchableOpacity onPress={() => setModalVisible(false)} style={[styles.cancelBtn, { borderColor: colors.border }]}>
-                            <Text style={[styles.cancelText, { color: colors.text }]}>Cancel</Text>
+                            <Text style={[styles.cancelText, { color: colors.text }]}>{t('common.cancel')}</Text>
                         </TouchableOpacity>
                         <TouchableOpacity onPress={saveSchedule} style={[styles.saveBtn, { backgroundColor: colors.accent }]}>
-                            <Text style={styles.saveText}>Save</Text>
+                            <Text style={styles.saveText}>{t('common.save')}</Text>
                         </TouchableOpacity>
                     </View>
                 </SafeAreaView>
@@ -381,9 +383,9 @@ export const ScheduleScreen = ({ onClose }: { onClose?: () => void }) => {
             {/* App Picker Modal */}
             <Modal visible={isAppPickerVisible} animationType="slide" presentationStyle="pageSheet">
                 <SafeAreaView style={[styles.modalContent, { backgroundColor: colors.background }]} edges={['top', 'bottom']}>
-                    <Text style={[styles.modalTitle, { color: colors.text }]}>Select Apps to Block</Text>
+                    <Text style={[styles.modalTitle, { color: colors.text }]}>{t('schedule.selectAppsToBlock')}</Text>
                     {appsLoading && installedApps.length === 0 ? (
-                        <Text style={[styles.loadingText, { color: colors.mutedText }]}>Loading apps…</Text>
+                        <Text style={[styles.loadingText, { color: colors.mutedText }]}>{t('common.loading')}</Text>
                     ) : (
                     <FlatList
                         data={installedApps}
@@ -406,7 +408,7 @@ export const ScheduleScreen = ({ onClose }: { onClose?: () => void }) => {
                     />
                     )}
                     <TouchableOpacity onPress={() => setAppPickerVisible(false)} style={[styles.saveBtn, { marginTop: 20, backgroundColor: colors.accent }]}>
-                        <Text style={styles.saveText}>Done</Text>
+                        <Text style={styles.saveText}>{t('common.done')}</Text>
                     </TouchableOpacity>
                 </SafeAreaView>
             </Modal>

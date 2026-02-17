@@ -10,6 +10,17 @@ export const Theme = {
     success: '#34D399',
     danger: '#F87171',
   },
+  lightColors: {
+    background: '#F4F1EA',
+    surface: '#FFFFFF',
+    accent: '#E67A4F',
+    accentLight: '#F1A281',
+    text: '#1F2329',
+    mutedText: '#64707D',
+    border: 'rgba(20,24,29,0.10)',
+    success: '#2F9A74',
+    danger: '#C44949',
+  },
   zenColors: {
     background: '#1F2A22',
     surface: '#2A3A2F',
@@ -18,6 +29,15 @@ export const Theme = {
     text: '#F4FFF8',
     mutedText: '#A7C4B6',
     border: 'rgba(255,255,255,0.12)',
+  },
+  zenLightColors: {
+    background: '#EAF4ED',
+    surface: '#F9FFFC',
+    accent: '#2D6A4F',
+    accentLight: '#4B9473',
+    text: '#173126',
+    mutedText: '#567063',
+    border: 'rgba(20,24,29,0.10)',
   },
   spacing: {
     xs: 6,
@@ -40,4 +60,9 @@ export const Theme = {
   },
 };
 
-export const getThemeColors = (isZenActive: boolean) => (isZenActive ? Theme.zenColors : Theme.colors);
+export const getThemeColors = (isZenActive: boolean, mode: 'dark' | 'light' = 'dark') => {
+  if (mode === 'light') {
+    return isZenActive ? Theme.zenLightColors : Theme.lightColors;
+  }
+  return isZenActive ? Theme.zenColors : Theme.colors;
+};
