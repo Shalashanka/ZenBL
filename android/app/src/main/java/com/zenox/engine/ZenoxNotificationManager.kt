@@ -31,13 +31,31 @@ class ZenoxNotificationManager(
         val launchPendingIntent = launchIntent?.let {
             PendingIntent.getActivity(
                 context,
-                0,
+                REQUEST_OPEN_APP,
                 it,
                 PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE,
             )
         }
+        val breakIntent = Intent(context, ZenoxNotificationActionReceiver::class.java).apply {
+            action = ZenoxNotificationActionReceiver.ACTION_BREAK_5M
+        }
+        val breakPendingIntent = PendingIntent.getBroadcast(
+            context,
+            REQUEST_BREAK_5M,
+            breakIntent,
+            PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE,
+        )
+        val endIntent = Intent(context, ZenoxNotificationActionReceiver::class.java).apply {
+            action = ZenoxNotificationActionReceiver.ACTION_END_ZEN
+        }
+        val endPendingIntent = PendingIntent.getBroadcast(
+            context,
+            REQUEST_END_ZEN,
+            endIntent,
+            PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE,
+        )
         val notification = NotificationCompat.Builder(context, CHANNEL_ID)
-            .setSmallIcon(R.mipmap.ic_launcher)
+            .setSmallIcon(R.drawable.ic_stat_zenox)
             .setLargeIcon(BitmapFactory.decodeResource(context.resources, R.mipmap.ic_launcher))
             .setContentTitle(title)
             .setContentText(body)
@@ -48,6 +66,9 @@ class ZenoxNotificationManager(
             .setPriority(NotificationCompat.PRIORITY_LOW)
             .setCategory(NotificationCompat.CATEGORY_PROGRESS)
             .setContentIntent(launchPendingIntent)
+            .addAction(R.drawable.ic_stat_zenox, "Open", launchPendingIntent)
+            .addAction(R.drawable.ic_stat_zenox, "Break 5m", breakPendingIntent)
+            .addAction(R.drawable.ic_stat_zenox, "End", endPendingIntent)
             .build()
 
         NotificationManagerCompat.from(context).notify(NOTIFICATION_ID, notification)
@@ -92,5 +113,8 @@ class ZenoxNotificationManager(
     companion object {
         private const val CHANNEL_ID = "zenox_active_session_channel"
         private const val NOTIFICATION_ID = 20261
+        private const val REQUEST_OPEN_APP = 201
+        private const val REQUEST_BREAK_5M = 202
+        private const val REQUEST_END_ZEN = 203
     }
 }

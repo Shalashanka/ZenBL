@@ -9,6 +9,7 @@ type FocusIconName = 'focus' | 'pomodoro' | 'detox' | 'sleep';
 
 type FocusCardProps = {
   title: string;
+  description: string;
   durationLabel: string;
   icon: FocusIconName;
   imageUri: string;
@@ -25,7 +26,7 @@ const IconByName = ({ icon }: { icon: FocusIconName }) => {
   return <MoonStar color={color} size={ICON_SIZE} />;
 };
 
-export const FocusCard = ({ title, durationLabel, icon, imageUri, onPress }: FocusCardProps) => {
+export const FocusCard = ({ title, description, durationLabel, icon, imageUri, onPress }: FocusCardProps) => {
   const scale = useSharedValue(1);
   const iconScale = useSharedValue(1);
 
@@ -72,7 +73,10 @@ export const FocusCard = ({ title, durationLabel, icon, imageUri, onPress }: Foc
             <Animated.View style={[styles.iconWrap, iconStyle]}>
               <IconByName icon={icon} />
             </Animated.View>
-            <Text style={styles.title}>{title}</Text>
+            <View>
+              <Text style={styles.title} numberOfLines={1}>{title}</Text>
+              <Text style={styles.description} numberOfLines={2}>{description}</Text>
+            </View>
             <Text style={styles.duration}>{durationLabel}</Text>
           </LinearGradient>
         </ImageBackground>
@@ -116,11 +120,20 @@ const styles = StyleSheet.create({
   title: {
     color: Theme.colors.text,
     fontSize: Theme.type.h2,
-    fontWeight: '700',
+    fontWeight: '800',
+    fontFamily: 'SNPro_Bold',
+  },
+  description: {
+    marginTop: 6,
+    color: '#E4E8F0',
+    fontSize: 13,
+    lineHeight: 18,
+    fontFamily: 'SNPro_Regular',
   },
   duration: {
-    color: '#D1D5DB',
+    color: '#F2F5FB',
     fontSize: Theme.type.body,
-    fontWeight: '500',
+    fontWeight: '700',
+    fontFamily: 'SNPro_Bold',
   },
 });

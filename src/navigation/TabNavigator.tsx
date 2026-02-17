@@ -2,7 +2,8 @@ import React from 'react';
 import { StyleSheet, View } from 'react-native';
 import { createBottomTabNavigator } from '@react-navigation/bottom-tabs';
 import { createNativeStackNavigator } from '@react-navigation/native-stack';
-import { BarChart2, Home, Settings } from 'lucide-react-native';
+import { FontAwesome6 } from '@expo/vector-icons';
+import { BarChart2 } from 'lucide-react-native';
 import { AppList } from '../screens/AppList';
 import { DashboardScreen } from '../screens/DashboardScreen';
 import { HomeScreen } from '../screens/HomeScreen';
@@ -15,12 +16,12 @@ export type RootStackParamList = {
   Tabs: undefined;
   AppList: undefined;
   Schedule: undefined;
+  Settings: undefined;
 };
 
 type TabParamList = {
   Home: undefined;
   Dashboard: undefined;
-  Settings: undefined;
 };
 
 const Tab = createBottomTabNavigator<TabParamList>();
@@ -29,9 +30,8 @@ const Stack = createNativeStackNavigator<RootStackParamList>();
 const TabIcon = ({ routeName, color, size }: { routeName: string; color: string; size: number }) => {
   return (
     <View style={styles.iconWrap}>
-      {routeName === 'Home' ? <Home color={color} size={size} /> : null}
+      {routeName === 'Home' ? <FontAwesome6 name="torii-gate" color={color} size={size + 1} /> : null}
       {routeName === 'Dashboard' ? <BarChart2 color={color} size={size} /> : null}
-      {routeName === 'Settings' ? <Settings color={color} size={size} /> : null}
     </View>
   );
 };
@@ -48,23 +48,28 @@ const Tabs = () => {
         sceneStyle: { backgroundColor: colors.background },
         tabBarStyle: {
           backgroundColor: colors.surface,
-          borderTopColor: colors.border,
-          height: 68,
-          paddingBottom: 8,
-          paddingTop: 8,
+          borderColor: colors.border,
+          borderTopLeftRadius: Theme.radius.lg,
+          borderTopRightRadius: Theme.radius.lg,
+          height: 82,
+          paddingBottom: 14,
+          paddingTop: 10,
+        },
+        tabBarItemStyle: {
+          paddingTop: 2,
         },
         tabBarActiveTintColor: colors.accent,
         tabBarInactiveTintColor: colors.mutedText,
         tabBarLabelStyle: {
           fontSize: 12,
           fontWeight: '600',
+          marginBottom: 2,
         },
         tabBarIcon: ({ color, size }) => <TabIcon routeName={route.name} color={color} size={size} />,
       })}
     >
       <Tab.Screen name="Home" component={HomeScreen} />
       <Tab.Screen name="Dashboard" component={DashboardScreen} />
-      <Tab.Screen name="Settings" component={SettingsScreen} />
     </Tab.Navigator>
   );
 };
@@ -87,6 +92,15 @@ export const AppNavigator = () => {
         component={ScheduleScreen}
         options={{
           title: 'Edit Schedules',
+          headerStyle: { backgroundColor: Theme.colors.surface },
+          headerTintColor: Theme.colors.text,
+        }}
+      />
+      <Stack.Screen
+        name="Settings"
+        component={SettingsScreen}
+        options={{
+          title: 'Command Center',
           headerStyle: { backgroundColor: Theme.colors.surface },
           headerTintColor: Theme.colors.text,
         }}

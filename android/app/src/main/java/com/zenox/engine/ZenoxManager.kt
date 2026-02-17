@@ -265,6 +265,18 @@ object ZenoxManager {
         return ((nowMillis - status.startTimeEpochMillis).coerceAtLeast(0L) / 60_000L).toInt()
     }
 
+    @Synchronized
+    fun getEffectiveRemainingMillis(nowMillis: Long = System.currentTimeMillis()): Long {
+        val status = ZenoxState.getStatus()
+        if (status !is ZenStatus.ACTIVE) return 0L
+        val breakActive = isEmergencyBreakActive(nowMillis)
+        return if (breakActive) {
+            (frozenRemainingMillis ?: (status.endTimeEpochMillis - nowMillis)).coerceAtLeast(0L)
+        } else {
+            (status.endTimeEpochMillis - nowMillis).coerceAtLeast(0L)
+        }
+    }
+
     fun getTotalTimeSavedTodayMinutes(nowMillis: Long = System.currentTimeMillis()): Int {
         return getActiveSessionElapsedMinutes(nowMillis)
     }

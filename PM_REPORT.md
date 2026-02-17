@@ -54,3 +54,46 @@ February 17, 2026
 
 ### Next Phase
 - Connect Home, Dashboard, and Settings to fully real native data (sessions, attempts, streaks, app-level stats) so all UI blocks reflect live engine state.
+
+## Upcoming Changes Plan (Backend + Data-Driven UI)
+
+### Phase 1 - Data Contracts and Bridge Expansion
+- Add a dashboard summary endpoint in native bridge:
+  - `getDashboardSummary()`: today minutes, week minutes, attempts today/week, streak, goal progress.
+  - `getTopBlockedApps(limit)`: app name, package name, attempts today/week.
+  - `getSessionHistory(range)`: session start/end/profile/duration/result.
+- Normalize all bridge payloads to typed DTOs with stable keys and numeric units (seconds/minutes).
+- Add defensive fallback values in JS layer for partial/empty native responses.
+
+### Phase 2 - Connect Existing UI to Real Data
+- Home:
+  - Replace static stats with live aggregate values.
+  - Bind Quick Zen and session cards to active profile/session state.
+  - Keep timer and notification state consistent across app + notification actions.
+- Dashboard:
+  - Replace placeholders with real weekly chart data and top blocked apps.
+  - Add empty/loading/error states for each card independently.
+- Settings:
+  - Show live permission status (overlay/accessibility/notifications/exact alarm).
+
+### Phase 3 - State and Calculation Integrity
+- Introduce a dedicated selector layer in store for all derived metrics:
+  - goal %, streak, time saved, focus momentum.
+- Add unit tests for calculations (edge cases: break mode, midnight rollover, no sessions).
+- Add bridge integration tests for DB aggregations.
+
+### Phase 4 - UX/Interaction Items Already Discussed
+- Keep slider range `5-120` with `1-minute` increment for precision.
+- Keep side menu full-screen, above tab bar, with gesture-close and micro animations.
+- Ensure modal -> Manage Blocked Apps -> back returns to the same open modal context.
+- Continue migrating remaining UI blocks to shared transitions after data contract stabilizes.
+
+### Phase 5 - Performance and Delivery
+- Profile/media assets:
+  - Keep profile images in WebP for runtime efficiency.
+  - Keep launcher/splash icons in platform-required PNG where needed.
+- Add release QA checklist for:
+  - timer/notification parity,
+  - block overlay trigger reliability,
+  - dashboard data correctness,
+  - animation smoothness in release APK.

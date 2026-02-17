@@ -80,7 +80,7 @@ class ZenoxBridgeModule(
         val map = Arguments.createMap()
         if (status is ZenStatus.ACTIVE) {
             map.putBoolean("isActive", true)
-            map.putDouble("remainingTime", max(status.endTimeEpochMillis - now, 0L).toDouble())
+            map.putDouble("remainingTime", ZenoxManager.getEffectiveRemainingMillis(now).toDouble())
         } else {
             map.putBoolean("isActive", false)
             map.putDouble("remainingTime", 0.0)
@@ -95,8 +95,9 @@ class ZenoxBridgeModule(
         val status = ZenoxState.getStatus()
         val map = Arguments.createMap()
         if (status is ZenStatus.ACTIVE) {
+            val remainingMillis = ZenoxManager.getEffectiveRemainingMillis(now)
             map.putBoolean("isActive", true)
-            map.putDouble("remainingSeconds", max((status.endTimeEpochMillis - now) / 1000L, 0L).toDouble())
+            map.putDouble("remainingSeconds", max(remainingMillis / 1000L, 0L).toDouble())
             map.putString("scheduleName", status.triggerType)
             map.putBoolean("isFortress", false)
         } else {
@@ -120,7 +121,7 @@ class ZenoxBridgeModule(
                     putBoolean("overlayAllowed", Settings.canDrawOverlays(reactApplicationContext))
                     putInt("blockedAppsCount", blockedCount)
                     putBoolean("isZenActive", status is ZenStatus.ACTIVE)
-                    val remaining = if (status is ZenStatus.ACTIVE) max(status.endTimeEpochMillis - now, 0L) else 0L
+                    val remaining = if (status is ZenStatus.ACTIVE) ZenoxManager.getEffectiveRemainingMillis(now) else 0L
                     putDouble("remainingTime", remaining.toDouble())
                 }
                 Log.d(TAG, "getDebugState -> $map")
@@ -519,7 +520,7 @@ class ZenoxBridgeModule(
         val status = ZenoxState.getStatus()
         val now = System.currentTimeMillis()
         payload.putBoolean("isActive", status is ZenStatus.ACTIVE)
-        val remaining = if (status is ZenStatus.ACTIVE) max(status.endTimeEpochMillis - now, 0L) else 0L
+        val remaining = if (status is ZenStatus.ACTIVE) ZenoxManager.getEffectiveRemainingMillis(now) else 0L
         payload.putDouble("remainingTime", remaining.toDouble())
         Log.d(TAG, "emitStatusChanged isActive=${status is ZenStatus.ACTIVE} remainingMs=$remaining")
         reactApplicationContext

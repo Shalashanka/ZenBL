@@ -3,6 +3,7 @@ import {
   Alert,
   FlatList,
   Image,
+  LayoutChangeEvent,
   Modal,
   PanResponder,
   ScrollView,
@@ -29,9 +30,9 @@ import Animated, {
 } from 'react-native-reanimated';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import * as Haptics from 'expo-haptics';
-import { Bell, Flame } from 'lucide-react-native';
+import { Flame, X, Settings as SettingsIcon, UserCircle2, Clock3, ShieldBan, Target, CalendarClock, BellRing } from 'lucide-react-native';
 import { useFocusEffect, useNavigation } from '@react-navigation/native';
-import { ZenoxEngine } from '../bridge/ZenoxEngine';
+import { WeeklyStat, ZenoxEngine } from '../bridge/ZenoxEngine';
 import { FocusCard } from '../components/FocusCard';
 import { FocusQuote } from '../components/FocusQuote';
 import { useZenoxStatus } from '../hooks/useZenoxStatus';
@@ -56,7 +57,7 @@ const SESSIONS: Session[] = [
     icon: 'focus',
     description: 'High-focus mode for coding, writing, and strategic work.',
     blockedApps: ['Instagram', 'TikTok', 'YouTube'],
-    imageUri: Image.resolveAssetSource(require('../../assets/profiles/deep-work.png')).uri,
+    imageUri: Image.resolveAssetSource(require('../../assets/profiles/deep-work.webp')).uri,
   },
   {
     id: 'pomodoro',
@@ -74,7 +75,7 @@ const SESSIONS: Session[] = [
     icon: 'detox',
     description: 'Aggressive social-media block for mental reset.',
     blockedApps: ['Instagram', 'TikTok', 'Facebook', 'X'],
-    imageUri: Image.resolveAssetSource(require('../../assets/profiles/social-detox.png')).uri,
+    imageUri: Image.resolveAssetSource(require('../../assets/profiles/social-detox.webp')).uri,
   },
   {
     id: 'sleep-mode',
@@ -83,18 +84,20 @@ const SESSIONS: Session[] = [
     icon: 'sleep',
     description: 'Wind-down profile for evening calm and no doomscrolling.',
     blockedApps: ['YouTube', 'Netflix', 'X'],
-    imageUri: Image.resolveAssetSource(require('../../assets/profiles/sleep.png')).uri,
+    imageUri: Image.resolveAssetSource(require('../../assets/profiles/sleep.webp')).uri,
   },
 ];
 
 const NAME_KEY = 'zenox_local_user_name';
-const QUICK_ZEN_MIN = 10;
+const QUICK_ZEN_MIN = 5;
 const QUICK_ZEN_MAX = 120;
-const QUICK_ZEN_STEP = 5;
+const QUICK_ZEN_STEP = 1;
 const TIMER_SIZE = 220;
 const TIMER_STROKE = 14;
 const TIMER_RADIUS = (TIMER_SIZE - TIMER_STROKE) / 2;
 const TIMER_CIRCUMFERENCE = 2 * Math.PI * TIMER_RADIUS;
+const DIAL_PAD = 28;
+const DIAL_CANVAS = TIMER_SIZE + DIAL_PAD * 2;
 
 const prettyDuration = (mins: number) => `${mins} min`;
 const formatDuration = (mins: number) => `${mins} minutes`;
@@ -107,6 +110,15 @@ const formatClock = (totalSeconds: number) => {
   return `${min}:${sec}`;
 };
 
+const formatMinutesCompact = (minutes: number) => {
+  const safe = Math.max(0, Math.floor(minutes));
+  const hours = Math.floor(safe / 60);
+  const mins = safe % 60;
+  if (hours <= 0) return `${mins}m`;
+  if (mins <= 0) return `${hours}h`;
+  return `${hours}h ${mins}m`;
+};
+
 export const HomeScreen = () => {
   const navigation = useNavigation<any>();
   const status = useZenoxStatus();
@@ -117,7 +129,7 @@ export const HomeScreen = () => {
   const statusActiveRef = useRef(status.isActive);
   const colors = getThemeColors(status.isActive || optimisticZen);
 
-  const { height } = useWindowDimensions();
+  const { height, width } = useWindowDimensions();
   const sheetHeight = Math.round(height * 0.75);
 
   const [userName, setUserName] = useState('');
@@ -126,7 +138,11 @@ export const HomeScreen = () => {
   const [streakDays] = useState(6);
   const [quickZenMinutes, setQuickZenMinutes] = useState(60);
   const [activeTotalSeconds, setActiveTotalSeconds] = useState(60 * 60);
+  const [weeklyStats, setWeeklyStats] = useState<WeeklyStat[]>([]);
+  const [isDialDragging, setDialDragging] = useState(false);
+  const [isMenuOpen, setMenuOpen] = useState(false);
   const prevZenActiveRef = useRef(status.isActive);
+  const dialLayoutRef = useRef({ x: 0, y: 0, width: DIAL_CANVAS, height: DIAL_CANVAS });
 
   const [sheetSession, setSheetSession] = useState<Session | null>(null);
   const [durationDraft, setDurationDraft] = useState(60);
@@ -135,18 +151,39 @@ export const HomeScreen = () => {
 
   const sheetY = useSharedValue(sheetHeight);
   const backdropOpacity = useSharedValue(0);
+  const menuX = useSharedValue(width);
+  const menuBackdropOpacity = useSharedValue(0);
+  const menuContentProgress = useSharedValue(0);
   const headerThemeProgress = useSharedValue(status.isActive ? 1 : 0);
   const carouselThemeProgress = useSharedValue(status.isActive ? 1 : 0);
   const statsThemeProgress = useSharedValue(status.isActive ? 1 : 0);
   const ctaThemeProgress = useSharedValue(status.isActive ? 1 : 0);
   const sheetDragStartY = useRef(0);
   const modalScrollY = useRef(0);
+  const ringDragActiveRef = useRef(false);
+  const menuDragStartX = useRef(0);
 
   useFocusEffect(
     React.useCallback(() => {
       setEnterKey((prev) => prev + 1);
-      return () => undefined;
-    }, [])
+      let mounted = true;
+      const loadLiveData = async () => {
+        try {
+          const [stats] = await Promise.all([ZenoxEngine.getWeeklyStats(), fetchBlockedApps()]);
+          if (mounted) {
+            setWeeklyStats(stats);
+          }
+        } catch {
+          if (mounted) {
+            setWeeklyStats([]);
+          }
+        }
+      };
+      loadLiveData();
+      return () => {
+        mounted = false;
+      };
+    }, [fetchBlockedApps])
   );
 
   useEffect(() => {
@@ -216,14 +253,24 @@ export const HomeScreen = () => {
     );
   }, [sheetSession, sheetHeight, backdropOpacity, sheetY]);
 
-  const stats = useMemo(
-    () => [
-      { label: 'Focus Time', value: '2h 40m' },
-      { label: 'App Kills', value: '19' },
-      { label: 'Goal', value: '82%' },
-    ],
-    []
-  );
+  useEffect(() => {
+    if (!isMenuOpen) {
+      menuX.value = width;
+      menuBackdropOpacity.value = 0;
+      menuContentProgress.value = 0;
+    }
+  }, [isMenuOpen, menuBackdropOpacity, menuContentProgress, menuX, width]);
+
+  const stats = useMemo(() => {
+    const totalMinutes = weeklyStats.reduce((acc, item) => acc + Math.max(0, item.minutes), 0);
+    const totalAttempts = weeklyStats.reduce((acc, item) => acc + Math.max(0, item.attempts), 0);
+    const goalPct = Math.min(100, Math.round((totalMinutes / 300) * 100));
+    return [
+      { label: 'Focus Time', value: formatMinutesCompact(totalMinutes), meta: 'This week', icon: 'clock' as const },
+      { label: 'App Kills', value: `${totalAttempts}`, meta: `${blockedApps.length} blocked apps`, icon: 'kills' as const },
+      { label: 'Goal', value: `${goalPct}%`, meta: `${Math.max(0, 100 - goalPct)}% to weekly goal`, icon: 'goal' as const },
+    ];
+  }, [blockedApps.length, weeklyStats]);
 
   const backdropStyle = useAnimatedStyle(() => ({
     opacity: backdropOpacity.value,
@@ -231,6 +278,24 @@ export const HomeScreen = () => {
 
   const sheetStyle = useAnimatedStyle(() => ({
     transform: [{ translateY: sheetY.value }],
+  }));
+
+  const menuStyle = useAnimatedStyle(() => ({
+    transform: [{ translateX: menuX.value }],
+  }));
+
+  const menuBackdropStyle = useAnimatedStyle(() => ({
+    opacity: menuBackdropOpacity.value,
+  }));
+
+  const menuHeaderStyle = useAnimatedStyle(() => ({
+    opacity: menuContentProgress.value,
+    transform: [{ translateX: (1 - menuContentProgress.value) * 18 }],
+  }));
+
+  const menuItemStyle = useAnimatedStyle(() => ({
+    opacity: menuContentProgress.value,
+    transform: [{ translateX: (1 - menuContentProgress.value) * 28 }],
   }));
 
   const pageBackgroundStyle = useAnimatedStyle(() => ({
@@ -373,32 +438,70 @@ export const HomeScreen = () => {
     setQuickZenMinutes(Math.min(QUICK_ZEN_MAX, Math.max(QUICK_ZEN_MIN, stepped)));
   }, []);
 
-  const applyQuickZenFromDialPoint = useCallback((x: number, y: number) => {
-    const center = TIMER_SIZE / 2;
-    const dx = x - center;
-    const dy = y - center;
+  const applyQuickZenFromScreenPoint = useCallback((screenX: number, screenY: number) => {
+    const centerX = dialLayoutRef.current.x + dialLayoutRef.current.width / 2;
+    const centerY = dialLayoutRef.current.y + dialLayoutRef.current.height / 2;
+    const dx = screenX - centerX;
+    const dy = screenY - centerY;
     let radians = Math.atan2(dy, dx) + Math.PI / 2;
     if (radians < 0) radians += Math.PI * 2;
     const ratio = radians / (Math.PI * 2);
     applyQuickZenFromRatio(ratio);
   }, [applyQuickZenFromRatio]);
 
+  const onDialLayout = useCallback((event: LayoutChangeEvent) => {
+    const node = event.currentTarget as unknown as {
+      measureInWindow?: (cb: (x: number, y: number, w: number, h: number) => void) => void;
+    };
+    node.measureInWindow?.((x, y, width, height) => {
+      dialLayoutRef.current = { x, y, width, height };
+    });
+  }, []);
+
+  const isNearRing = useCallback((locationX: number, locationY: number) => {
+    const center = DIAL_CANVAS / 2;
+    const dx = locationX - center;
+    const dy = locationY - center;
+    const distance = Math.sqrt(dx * dx + dy * dy);
+    const ringInner = TIMER_RADIUS - 16;
+    const ringOuter = TIMER_RADIUS + 18;
+    return distance >= ringInner && distance <= ringOuter;
+  }, []);
+
   const dialPanResponder = useMemo(
     () =>
       PanResponder.create({
-        onStartShouldSetPanResponder: () => !status.isActive,
-        onMoveShouldSetPanResponder: () => !status.isActive,
-        onPanResponderGrant: (event) => {
-          applyQuickZenFromDialPoint(event.nativeEvent.locationX, event.nativeEvent.locationY);
+        onStartShouldSetPanResponderCapture: (event) =>
+          !status.isActive && isNearRing(event.nativeEvent.locationX, event.nativeEvent.locationY),
+        onMoveShouldSetPanResponderCapture: (event) =>
+          !status.isActive && (ringDragActiveRef.current || isNearRing(event.nativeEvent.locationX, event.nativeEvent.locationY)),
+        onStartShouldSetPanResponder: (event) =>
+          !status.isActive && isNearRing(event.nativeEvent.locationX, event.nativeEvent.locationY),
+        onMoveShouldSetPanResponder: (event) =>
+          !status.isActive && (ringDragActiveRef.current || isNearRing(event.nativeEvent.locationX, event.nativeEvent.locationY)),
+        onPanResponderTerminationRequest: () => false,
+        onPanResponderGrant: () => {
+          ringDragActiveRef.current = true;
+          setDialDragging(true);
         },
-        onPanResponderMove: (event) => {
-          applyQuickZenFromDialPoint(event.nativeEvent.locationX, event.nativeEvent.locationY);
+        onPanResponderMove: (_, gesture) => {
+          applyQuickZenFromScreenPoint(gesture.moveX, gesture.moveY);
+        },
+        onPanResponderRelease: () => {
+          ringDragActiveRef.current = false;
+          setDialDragging(false);
+        },
+        onPanResponderTerminate: () => {
+          ringDragActiveRef.current = false;
+          setDialDragging(false);
         },
       }),
-    [applyQuickZenFromDialPoint, status.isActive]
+    [applyQuickZenFromScreenPoint, isNearRing, status.isActive]
   );
 
   const nudgeQuickZen = useCallback((direction: -1 | 1) => {
+    ringDragActiveRef.current = false;
+    setDialDragging(false);
     setQuickZenMinutes((prev) => {
       const next = prev + direction * QUICK_ZEN_STEP;
       return Math.max(QUICK_ZEN_MIN, Math.min(QUICK_ZEN_MAX, next));
@@ -455,8 +558,43 @@ export const HomeScreen = () => {
   };
 
   const goToBlockedApps = () => {
-    closeSessionSheet();
     navigation.navigate('AppList');
+  };
+
+  const openSideMenu = () => {
+    setMenuOpen(true);
+    menuX.value = width;
+    menuContentProgress.value = 0;
+    menuBackdropOpacity.value = withTiming(1, { duration: 220, easing: Easing.out(Easing.quad) });
+    menuX.value = withTiming(0, { duration: 320, easing: Easing.out(Easing.cubic) });
+    menuContentProgress.value = withDelay(120, withTiming(1, { duration: 320, easing: Easing.out(Easing.cubic) }));
+  };
+
+  const closeSideMenu = useCallback(() => {
+    menuContentProgress.value = withTiming(0, { duration: 120, easing: Easing.out(Easing.quad) });
+    menuBackdropOpacity.value = withTiming(0, { duration: 180, easing: Easing.out(Easing.quad) });
+    menuX.value = withTiming(width, { duration: 260, easing: Easing.in(Easing.cubic) });
+    setTimeout(() => setMenuOpen(false), 260);
+  }, [menuBackdropOpacity, menuContentProgress, menuX, width]);
+
+  const openSettingsFromMenu = () => {
+    closeSideMenu();
+    navigation.navigate('Settings');
+  };
+
+  const openAppsFromMenu = () => {
+    closeSideMenu();
+    navigation.navigate('AppList');
+  };
+
+  const openSchedulesFromMenu = () => {
+    closeSideMenu();
+    navigation.navigate('Schedule');
+  };
+
+  const openNotificationPermissionFromMenu = () => {
+    closeSideMenu();
+    ZenoxEngine.requestNotificationPermission();
   };
 
   const increaseDuration = () => setDurationDraft((prev) => Math.min(prev + 5, 180));
@@ -499,19 +637,46 @@ export const HomeScreen = () => {
     [sheetY]
   );
 
+  const sideMenuPanResponder = useMemo(
+    () =>
+      PanResponder.create({
+        onMoveShouldSetPanResponder: (_, gesture) =>
+          Math.abs(gesture.dx) > Math.abs(gesture.dy) && gesture.dx > 6,
+        onPanResponderGrant: () => {
+          menuDragStartX.current = menuX.value;
+        },
+        onPanResponderMove: (_, gesture) => {
+          const nextX = Math.max(0, Math.min(width, menuDragStartX.current + gesture.dx));
+          menuX.value = nextX;
+          menuBackdropOpacity.value = 1 - nextX / width;
+        },
+        onPanResponderRelease: (_, gesture) => {
+          const shouldClose = gesture.dx > width * 0.18 || gesture.vx > 0.85;
+          if (shouldClose) {
+            closeSideMenu();
+            return;
+          }
+          menuX.value = withTiming(0, { duration: 220, easing: Easing.out(Easing.cubic) });
+          menuBackdropOpacity.value = withTiming(1, { duration: 180, easing: Easing.out(Easing.quad) });
+        },
+      }),
+    [closeSideMenu, menuBackdropOpacity, menuX, width]
+  );
+
   const displayTotalSeconds = status.isActive ? Math.max(activeTotalSeconds, 1) : quickZenMinutes * 60;
   const displayRemainingSeconds = status.isActive ? status.remainingSeconds : displayTotalSeconds;
   const progressRatio = Math.min(1, Math.max(0, displayRemainingSeconds / displayTotalSeconds));
-  const dashOffset = TIMER_CIRCUMFERENCE * (1 - progressRatio);
   const sliderRatio = (quickZenMinutes - QUICK_ZEN_MIN) / (QUICK_ZEN_MAX - QUICK_ZEN_MIN);
+  const ringRatio = status.isActive ? progressRatio : sliderRatio;
+  const dashOffset = TIMER_CIRCUMFERENCE * (1 - ringRatio);
   const dialAngle = sliderRatio * Math.PI * 2 - Math.PI / 2;
-  const knobX = TIMER_SIZE / 2 + TIMER_RADIUS * Math.cos(dialAngle);
-  const knobY = TIMER_SIZE / 2 + TIMER_RADIUS * Math.sin(dialAngle);
+  const knobX = DIAL_CANVAS / 2 + TIMER_RADIUS * Math.cos(dialAngle);
+  const knobY = DIAL_CANVAS / 2 + TIMER_RADIUS * Math.sin(dialAngle);
 
   return (
     <Animated.View style={[styles.container, pageBackgroundStyle]}>
       <SafeAreaView style={styles.safeArea} edges={['top']}>
-      <ScrollView contentContainerStyle={styles.content} showsVerticalScrollIndicator={false}>
+      <ScrollView contentContainerStyle={styles.content} showsVerticalScrollIndicator={false} scrollEnabled={!isDialDragging}>
         <Animated.View key={`header-${enterKey}`} entering={FadeInDown.duration(620)} style={styles.headerRow}>
           <View>
             <View style={styles.titleRow}>
@@ -522,72 +687,30 @@ export const HomeScreen = () => {
                 <Text style={[styles.streakText, { color: colors.text }]}>{streakDays}</Text>
               </View>
             </View>
-            <Text style={[styles.headerSubtitle, { color: colors.mutedText }]}>Ready for a calm, focused session?</Text>
             <FocusQuote color={colors.mutedText} />
           </View>
-          <Animated.View style={[styles.headerIconWrap, headerSurfaceStyle]}>
-            <Bell color={colors.text} size={18} />
-          </Animated.View>
-        </Animated.View>
-
-        <Animated.View key={`carousel-${enterKey}`} entering={FadeInDown.duration(620).delay(80)} style={carouselSurfaceStyle}>
-          <FlatList
-            data={SESSIONS}
-            horizontal
-            snapToAlignment="start"
-            snapToInterval={266}
-            decelerationRate="fast"
-            showsHorizontalScrollIndicator={false}
-            keyExtractor={(item) => item.id}
-            contentContainerStyle={styles.carouselContent}
-            onMomentumScrollEnd={() => {
-              Haptics.selectionAsync().catch(() => undefined);
-            }}
-            renderItem={({ item }) => (
-              <FocusCard
-                title={item.title}
-                durationLabel={prettyDuration(item.durationMinutes)}
-                icon={item.icon}
-                imageUri={item.imageUri}
-                onPress={() => openSessionSheet(item)}
-              />
-            )}
-          />
-        </Animated.View>
-
-        <Animated.View key={`stats-${enterKey}`} entering={FadeInDown.duration(620).delay(160)} style={styles.bentleyGrid}>
-          <Animated.View style={[styles.primaryStatCard, statPrimaryStyle]}>
-            <Text style={[styles.primaryStatValue, { color: colors.text }]}>{stats[0].value}</Text>
-            <Text style={[styles.primaryStatLabel, { color: colors.mutedText }]}>{stats[0].label}</Text>
-          </Animated.View>
-
-          <View style={styles.secondaryStatsCol}>
-            <Animated.View style={[styles.secondaryStatCard, statPrimaryStyle]}>
-              <Text style={[styles.secondaryStatValue, { color: colors.text }]}>{stats[1].value}</Text>
-              <Text style={[styles.secondaryStatLabel, { color: colors.mutedText }]}>{stats[1].label}</Text>
+          <TouchableOpacity onPress={openSideMenu} activeOpacity={0.85}>
+            <Animated.View style={[styles.headerIconWrap, headerSurfaceStyle]}>
+              <UserCircle2 color={colors.text} size={18} />
             </Animated.View>
-            <Animated.View style={[styles.secondaryStatCard, statPrimaryStyle]}>
-              <Text style={[styles.secondaryStatValue, { color: colors.text }]}>{stats[2].value}</Text>
-              <Text style={[styles.secondaryStatLabel, { color: colors.mutedText }]}>{stats[2].label}</Text>
-            </Animated.View>
-          </View>
+          </TouchableOpacity>
         </Animated.View>
 
-        <Animated.View key={`cta-${enterKey}`} entering={FadeInDown.duration(620).delay(240)}>
+        <Animated.View key={`cta-${enterKey}`} entering={FadeInDown.duration(620).delay(80)}>
           <Animated.View style={[styles.timerCard, statPrimaryStyle]}>
-            <View style={styles.timerDialWrap} {...dialPanResponder.panHandlers}>
-              <Svg width={TIMER_SIZE} height={TIMER_SIZE} style={styles.timerSvg}>
+            <View style={styles.timerDialWrap} onLayout={onDialLayout} {...dialPanResponder.panHandlers}>
+              <Svg width={DIAL_CANVAS} height={DIAL_CANVAS} style={styles.timerSvg}>
                 <Circle
-                  cx={TIMER_SIZE / 2}
-                  cy={TIMER_SIZE / 2}
+                  cx={DIAL_CANVAS / 2}
+                  cy={DIAL_CANVAS / 2}
                   r={TIMER_RADIUS}
-                  stroke={colors.border}
+                  stroke={status.isActive ? '#262D37' : '#0B0E13'}
                   strokeWidth={TIMER_STROKE}
                   fill="transparent"
                 />
                 <Circle
-                  cx={TIMER_SIZE / 2}
-                  cy={TIMER_SIZE / 2}
+                  cx={DIAL_CANVAS / 2}
+                  cy={DIAL_CANVAS / 2}
                   r={TIMER_RADIUS}
                   stroke={colors.accent}
                   strokeWidth={TIMER_STROKE}
@@ -595,13 +718,13 @@ export const HomeScreen = () => {
                   strokeLinecap="round"
                   strokeDasharray={`${TIMER_CIRCUMFERENCE} ${TIMER_CIRCUMFERENCE}`}
                   strokeDashoffset={dashOffset}
-                  transform={`rotate(-90 ${TIMER_SIZE / 2} ${TIMER_SIZE / 2})`}
+                  transform={`rotate(-90 ${DIAL_CANVAS / 2} ${DIAL_CANVAS / 2})`}
                 />
                 {!status.isActive ? (
                   <Circle
                     cx={knobX}
                     cy={knobY}
-                    r={10}
+                    r={15}
                     fill={colors.surface}
                     stroke={colors.accent}
                     strokeWidth={3}
@@ -638,7 +761,117 @@ export const HomeScreen = () => {
             </Animated.View>
           </Animated.View>
         </Animated.View>
+
+        <Animated.View key={`stats-${enterKey}`} entering={FadeInDown.duration(620).delay(140)} style={styles.bentleyGrid}>
+          <Animated.View style={[styles.primaryStatCard, { backgroundColor: '#EF6A3E', borderColor: '#F38B68' }]}>
+            <View style={styles.statIconWrap}>
+              <Clock3 color="#FFFFFF" size={16} />
+              <Text style={styles.statMetaOnColor}>{stats[0].meta}</Text>
+            </View>
+            <Text style={[styles.primaryStatValue, { color: colors.text }]}>{stats[0].value}</Text>
+            <Text style={[styles.primaryStatLabel, { color: '#FFEADD' }]}>{stats[0].label}</Text>
+          </Animated.View>
+
+          <View style={styles.secondaryStatsCol}>
+            <Animated.View style={[styles.secondaryStatCard, { backgroundColor: '#226A58', borderColor: '#2F8A73' }]}>
+              <View style={styles.statIconWrap}>
+                <ShieldBan color="#FFFFFF" size={15} />
+                <Text style={styles.statMetaOnColor}>{stats[1].meta}</Text>
+              </View>
+              <Text style={[styles.secondaryStatValue, { color: colors.text }]}>{stats[1].value}</Text>
+              <Text style={[styles.secondaryStatLabel, { color: '#D1FFF2' }]}>{stats[1].label}</Text>
+            </Animated.View>
+            <Animated.View style={[styles.secondaryStatCard, { backgroundColor: '#2E4FB7', borderColor: '#4E73E0' }]}>
+              <View style={styles.statIconWrap}>
+                <Target color="#FFFFFF" size={15} />
+                <Text style={styles.statMetaOnColor}>{stats[2].meta}</Text>
+              </View>
+              <Text style={[styles.secondaryStatValue, { color: colors.text }]}>{stats[2].value}</Text>
+              <Text style={[styles.secondaryStatLabel, { color: '#E0E8FF' }]}>{stats[2].label}</Text>
+            </Animated.View>
+          </View>
+        </Animated.View>
+
+        <Animated.View
+          key={`carousel-${enterKey}`}
+          entering={FadeInDown.duration(620).delay(200)}
+          style={[styles.carouselBleed, carouselSurfaceStyle]}
+        >
+          <FlatList
+            data={SESSIONS}
+            horizontal
+            snapToAlignment="start"
+            snapToInterval={266}
+            decelerationRate="fast"
+            showsHorizontalScrollIndicator={false}
+            keyExtractor={(item) => item.id}
+            contentContainerStyle={styles.carouselContent}
+            onMomentumScrollEnd={() => {
+              Haptics.selectionAsync().catch(() => undefined);
+            }}
+            renderItem={({ item }) => (
+              <FocusCard
+                title={item.title}
+                description={item.description}
+                durationLabel={prettyDuration(item.durationMinutes)}
+                icon={item.icon}
+                imageUri={item.imageUri}
+                onPress={() => openSessionSheet(item)}
+              />
+            )}
+          />
+        </Animated.View>
       </ScrollView>
+
+      <Modal animationType="none" transparent visible={isMenuOpen} onRequestClose={closeSideMenu}>
+        <Animated.View pointerEvents="auto" style={[styles.menuBackdrop, menuBackdropStyle]}>
+          <TouchableOpacity style={StyleSheet.absoluteFill} activeOpacity={1} onPress={closeSideMenu} />
+        </Animated.View>
+        <Animated.View
+          style={[styles.sideMenu, { backgroundColor: colors.surface, borderColor: colors.border }, menuStyle]}
+          {...sideMenuPanResponder.panHandlers}
+        >
+          <SafeAreaView style={styles.sideMenuSafe} edges={['top', 'bottom']}>
+            <TouchableOpacity style={styles.menuCloseIcon} onPress={closeSideMenu}>
+              <X color={colors.text} size={26} />
+            </TouchableOpacity>
+
+            <Animated.View style={[styles.sideMenuHeader, menuHeaderStyle]}>
+              <UserCircle2 color={colors.accent} size={88} />
+              <Text style={[styles.sideMenuTitle, { color: colors.text }]}>{userName || 'Zenox User'}</Text>
+              <Text style={[styles.sideMenuSub, { color: colors.mutedText }]}>Account & Controls</Text>
+            </Animated.View>
+
+            <Animated.View style={menuItemStyle}>
+              <TouchableOpacity style={[styles.sideMenuItem, { borderColor: colors.border }]} onPress={openAppsFromMenu}>
+                <ShieldBan color={colors.text} size={18} />
+                <Text style={[styles.sideMenuItemText, { color: colors.text }]}>Manage Blocked Apps</Text>
+              </TouchableOpacity>
+            </Animated.View>
+
+            <Animated.View style={menuItemStyle}>
+              <TouchableOpacity style={[styles.sideMenuItem, { borderColor: colors.border }]} onPress={openSchedulesFromMenu}>
+                <CalendarClock color={colors.text} size={18} />
+                <Text style={[styles.sideMenuItemText, { color: colors.text }]}>Schedules</Text>
+              </TouchableOpacity>
+            </Animated.View>
+
+            <Animated.View style={menuItemStyle}>
+              <TouchableOpacity style={[styles.sideMenuItem, { borderColor: colors.border }]} onPress={openSettingsFromMenu}>
+                <SettingsIcon color={colors.text} size={18} />
+                <Text style={[styles.sideMenuItemText, { color: colors.text }]}>Settings</Text>
+              </TouchableOpacity>
+            </Animated.View>
+
+            <Animated.View style={menuItemStyle}>
+              <TouchableOpacity style={[styles.sideMenuItem, { borderColor: colors.border }]} onPress={openNotificationPermissionFromMenu}>
+                <BellRing color={colors.text} size={18} />
+                <Text style={[styles.sideMenuItemText, { color: colors.text }]}>Notifications</Text>
+              </TouchableOpacity>
+            </Animated.View>
+          </SafeAreaView>
+        </Animated.View>
+      </Modal>
 
       <Modal animationType="none" transparent visible={!!sheetSession} onRequestClose={closeSessionSheet}>
         <View style={styles.sheetRoot}>
@@ -770,6 +1003,7 @@ const styles = StyleSheet.create({
     padding: Theme.spacing.md,
     paddingBottom: Theme.spacing.xl,
     gap: Theme.spacing.lg,
+    overflow: 'visible',
   },
   headerRow: {
     flexDirection: 'row',
@@ -785,12 +1019,12 @@ const styles = StyleSheet.create({
   headerTitle: {
     fontSize: Theme.type.h1,
     fontWeight: '400',
-    fontFamily: 'Inter_900Black', // Intentional for that extra oomph
-    letterSpacing: -0.2,
+    fontFamily: 'SNPro_Bold',
+    letterSpacing: 0.1,
   },
   headerName: {
     fontStyle: 'normal',
-    fontWeight: '700',
+    fontFamily: 'SNPro_Bold',
   },
   streakPill: {
     flexDirection: 'row',
@@ -806,10 +1040,6 @@ const styles = StyleSheet.create({
     fontSize: 12,
     fontWeight: '700',
   },
-  headerSubtitle: {
-    fontSize: Theme.type.body,
-    marginTop: 6,
-  },
   headerIconWrap: {
     width: 36,
     height: 36,
@@ -820,6 +1050,10 @@ const styles = StyleSheet.create({
   },
   carouselContent: {
     paddingVertical: 4,
+    paddingRight: Theme.spacing.md,
+  },
+  carouselBleed: {
+    marginRight: -Theme.spacing.md,
   },
   bentleyGrid: {
     flexDirection: 'row',
@@ -827,18 +1061,20 @@ const styles = StyleSheet.create({
   },
   primaryStatCard: {
     flex: 1.4,
-    minHeight: 136,
+    minHeight: 92,
     borderWidth: 1,
     borderRadius: Theme.radius.md,
-    padding: Theme.spacing.md,
+    padding: 10,
     justifyContent: 'space-between',
   },
   primaryStatValue: {
-    fontSize: 28,
-    fontWeight: '700',
+    fontSize: 26,
+    fontWeight: '800',
+    fontFamily: 'SNPro_Bold',
   },
   primaryStatLabel: {
-    fontSize: Theme.type.body,
+    fontSize: 13,
+    fontFamily: 'SNPro_Bold',
   },
   secondaryStatsCol: {
     flex: 1,
@@ -848,15 +1084,28 @@ const styles = StyleSheet.create({
     flex: 1,
     borderWidth: 1,
     borderRadius: Theme.radius.md,
-    padding: Theme.spacing.sm,
+    paddingVertical: 6,
+    paddingHorizontal: 8,
     justifyContent: 'space-between',
   },
   secondaryStatValue: {
-    fontSize: 18,
-    fontWeight: '700',
+    fontSize: 22,
+    fontWeight: '800',
+    fontFamily: 'SNPro_Bold',
   },
   secondaryStatLabel: {
-    fontSize: Theme.type.caption,
+    fontSize: 12,
+    fontFamily: 'SNPro_Bold',
+  },
+  statIconWrap: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+  },
+  statMetaOnColor: {
+    color: 'rgba(255,255,255,0.88)',
+    fontSize: 10,
+    fontFamily: 'SNPro_Regular',
   },
   instantButton: {
     marginTop: Theme.spacing.md,
@@ -889,15 +1138,21 @@ const styles = StyleSheet.create({
     position: 'absolute',
     alignItems: 'center',
     justifyContent: 'center',
+    width: TIMER_SIZE,
   },
   timerClock: {
-    fontSize: 44,
-    fontWeight: '700',
-    letterSpacing: -1.4,
+    fontSize: 42,
+    fontWeight: '800',
+    letterSpacing: 0,
+    minWidth: 170,
+    textAlign: 'center',
+    fontVariant: ['tabular-nums'],
+    fontFamily: 'SNPro_Bold',
   },
   timerSubText: {
     marginTop: 6,
     fontSize: Theme.type.body,
+    fontFamily: 'SNPro_Regular',
   },
   sliderSection: {
     marginTop: Theme.spacing.md,
@@ -920,6 +1175,65 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     gap: 12,
     justifyContent: 'center',
+  },
+  menuBackdrop: {
+    ...StyleSheet.absoluteFillObject,
+    backgroundColor: 'rgba(0,0,0,0.45)',
+    zIndex: 20,
+  },
+  sideMenu: {
+    position: 'absolute',
+    top: 0,
+    left: 0,
+    right: 0,
+    bottom: 0,
+    width: '100%',
+    zIndex: 21,
+  },
+  sideMenuSafe: {
+    flex: 1,
+    paddingHorizontal: 20,
+    paddingTop: 12,
+    gap: 14,
+  },
+  menuCloseIcon: {
+    width: 42,
+    height: 42,
+    borderRadius: 21,
+    alignItems: 'center',
+    justifyContent: 'center',
+    alignSelf: 'flex-end',
+  },
+  sideMenuHeader: {
+    marginTop: 8,
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 6,
+    marginBottom: 16,
+  },
+  sideMenuTitle: {
+    marginTop: 6,
+    fontSize: 26,
+    fontFamily: 'SNPro_Bold',
+    textAlign: 'center',
+  },
+  sideMenuSub: {
+    fontSize: 13,
+    marginTop: 4,
+    textAlign: 'center',
+  },
+  sideMenuItem: {
+    minHeight: 54,
+    borderWidth: 1,
+    borderRadius: 14,
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 12,
+    paddingHorizontal: 14,
+  },
+  sideMenuItemText: {
+    fontSize: 15,
+    fontFamily: 'SNPro_Bold',
   },
   sheetRoot: {
     flex: 1,
