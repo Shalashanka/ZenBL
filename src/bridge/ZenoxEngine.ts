@@ -13,6 +13,31 @@ export type WeeklyStat = {
   attempts: number;
 };
 
+export type DashboardSummary = {
+  todayMinutes: number;
+  weekMinutes: number;
+  attemptsToday: number;
+  attemptsWeek: number;
+  blockedAppsCount: number;
+  goalProgressPct: number;
+  currentStreakDays: number;
+};
+
+export type TopBlockedApp = {
+  packageName: string;
+  appName: string;
+  attemptsToday: number;
+  attemptsWeek: number;
+};
+
+export type SessionHistoryItem = {
+  id: string;
+  day: string;
+  minutes: number;
+  attempts: number;
+  source: string;
+};
+
 export type ZenProfilePayload = {
   id: number;
   name: string;
@@ -24,6 +49,9 @@ const engine = NativeZenEngine as (typeof NativeZenEngine & {
   setActiveProfile?: (profileJson: string) => void;
   startZen?: (durationMs: number) => void;
   getWeeklyStats?: () => Promise<WeeklyStat[]>;
+  getDashboardSummary?: () => Promise<DashboardSummary>;
+  getTopBlockedApps?: (limit: number) => Promise<TopBlockedApp[]>;
+  getSessionHistory?: (days: number) => Promise<SessionHistoryItem[]>;
 }) | null;
 
 export const ZenoxEngine = {
@@ -142,6 +170,33 @@ export const ZenoxEngine = {
   async getWeeklyStats(): Promise<WeeklyStat[]> {
     if (!engine?.getWeeklyStats) return [];
     const result = await engine.getWeeklyStats();
+    return Array.isArray(result) ? result : [];
+  },
+
+  async getDashboardSummary(): Promise<DashboardSummary> {
+    if (!engine?.getDashboardSummary) {
+      return {
+        todayMinutes: 0,
+        weekMinutes: 0,
+        attemptsToday: 0,
+        attemptsWeek: 0,
+        blockedAppsCount: 0,
+        goalProgressPct: 0,
+        currentStreakDays: 0,
+      };
+    }
+    return engine.getDashboardSummary();
+  },
+
+  async getTopBlockedApps(limit = 5): Promise<TopBlockedApp[]> {
+    if (!engine?.getTopBlockedApps) return [];
+    const result = await engine.getTopBlockedApps(limit);
+    return Array.isArray(result) ? result : [];
+  },
+
+  async getSessionHistory(days = 14): Promise<SessionHistoryItem[]> {
+    if (!engine?.getSessionHistory) return [];
+    const result = await engine.getSessionHistory(days);
     return Array.isArray(result) ? result : [];
   },
 

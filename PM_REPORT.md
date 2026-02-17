@@ -97,3 +97,38 @@ February 17, 2026
   - block overlay trigger reliability,
   - dashboard data correctness,
   - animation smoothness in release APK.
+
+## Update
+February 17, 2026 (Evening)
+
+### UI + Gesture Flow
+- Reworked profile modal flow to support in-modal deep navigation:
+  - `Profile modal (75%)` -> `Manage Blocked Apps (full screen)` with animated expansion.
+  - Back/collapse returns to profile modal when opened from profile context.
+- Side menu converted to full-screen overlay (covers tab bar) with gesture-close (swipe right) and animated micro-entrance.
+- Added additional menu actions:
+  - Manage Blocked Apps
+  - Schedules
+  - Settings
+  - Notifications
+- Updated AppList and Schedule screens to match app theme and typography.
+
+### Data / Backend Phase 1 Progress
+- Added native bridge methods:
+  - `getDashboardSummary()`
+  - `getTopBlockedApps(limit)`
+  - `getSessionHistory(days)`
+- Refactored weekly stats internals to reusable daily stats query.
+- Wired JS bridge types and methods in `ZenoxEngine.ts` for the new contracts.
+- Home stats now consume real weekly data aggregates.
+- Dashboard now consumes:
+  - real weekly stats,
+  - dashboard summary,
+  - top blocked apps.
+
+### Charts
+- Adopted `react-native-gifted-charts` for dashboard chart rendering (as requested), replacing custom chart drawing.
+
+### Verification Status
+- TypeScript check: PASS (`npx tsc --noEmit`)
+- Android Kotlin compile: PASS (`:app:compileDebugKotlin`)

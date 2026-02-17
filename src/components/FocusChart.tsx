@@ -1,50 +1,61 @@
 import React, { memo, useMemo, useState } from 'react';
 import { Pressable, StyleSheet, Text, View } from 'react-native';
 import * as Haptics from 'expo-haptics';
-import Animated, { FadeInUp } from 'react-native-reanimated';
-import { LinearGradient } from 'expo-linear-gradient';
+import { BarChart } from 'react-native-gifted-charts';
 import { Theme } from '../theme/Theme';
 import type { WeeklyStat } from '../bridge/ZenoxEngine';
 
 type FocusChartProps = {
   data: WeeklyStat[];
 };
-const CHART_MAX_BAR_HEIGHT = 128;
 
 export const FocusChart = memo(({ data }: FocusChartProps) => {
   const [selected, setSelected] = useState<WeeklyStat | null>(null);
 
-  const maxMinutes = useMemo(() => {
-    const maxVal = Math.max(...data.map((d) => d.minutes), 1);
-    return maxVal;
-  }, [data]);
+  const chartData = useMemo(
+    () =>
+      data.map((item) => ({
+        value: Math.max(item.minutes, 0),
+        label: item.day,
+        frontColor: Theme.colors.accent,
+      })),
+    [data]
+  );
+
+  const maxValue = useMemo(() => Math.max(...chartData.map((d) => d.value), 1), [chartData]);
 
   return (
     <View>
-      <View style={styles.row}>
-        {data.map((item, index) => {
-          const heightPx = Math.max((item.minutes / maxMinutes) * CHART_MAX_BAR_HEIGHT, 10);
-          return (
-            <Pressable
-              key={`${item.day}-${index}`}
-              style={styles.barCol}
-              onLongPress={() => {
-                setSelected(item);
-                Haptics.selectionAsync().catch(() => undefined);
-              }}
-            >
-              <Animated.View entering={FadeInUp.delay(index * 100).duration(500)} style={[styles.barWrap, { height: heightPx }]}>
-                <LinearGradient
-                  colors={[Theme.colors.accentLight, Theme.colors.accent, 'rgba(255,112,67,0.12)']}
-                  start={{ x: 0.5, y: 0 }}
-                  end={{ x: 0.5, y: 1 }}
-                  style={styles.bar}
-                />
-              </Animated.View>
-              <Text style={styles.dayLabel}>{item.day}</Text>
-            </Pressable>
-          );
-        })}
+      <BarChart
+        data={chartData}
+        barWidth={14}
+        spacing={22}
+        hideRules
+        hideYAxisText
+        hideAxesAndRules
+        xAxisColor="transparent"
+        yAxisColor="transparent"
+        yAxisTextStyle={styles.axisLabel}
+        xAxisLabelTextStyle={styles.axisLabel}
+        noOfSections={4}
+        maxValue={maxValue}
+        isAnimated
+        animationDuration={700}
+        roundedTop
+        roundedBottom
+      />
+
+      <View style={styles.touchRow}>
+        {data.map((item, index) => (
+          <Pressable
+            key={`${item.day}-${index}`}
+            onLongPress={() => {
+              setSelected(item);
+              Haptics.selectionAsync().catch(() => undefined);
+            }}
+            style={styles.touchHit}
+          />
+        ))}
       </View>
 
       {selected ? (
@@ -59,36 +70,28 @@ export const FocusChart = memo(({ data }: FocusChartProps) => {
 });
 
 const styles = StyleSheet.create({
-  row: {
-    height: 160,
-    flexDirection: 'row',
-    alignItems: 'flex-end',
-    justifyContent: 'space-between',
-  },
-  barCol: {
-    width: 26,
-    alignItems: 'center',
-    height: '100%',
-    justifyContent: 'flex-end',
-  },
-  barWrap: {
-    width: 14,
-    borderRadius: 10,
-    overflow: 'hidden',
-    minHeight: 10,
-  },
-  bar: {
-    flex: 1,
-    borderRadius: 10,
-  },
-  dayLabel: {
+  axisLabel: {
     color: Theme.colors.mutedText,
     fontSize: 11,
-    marginTop: 8,
+    fontFamily: 'SNPro_Regular',
   },
   hintText: {
     marginTop: 12,
     color: Theme.colors.mutedText,
     fontSize: Theme.type.caption,
+    fontFamily: 'SNPro_Regular',
+  },
+  touchRow: {
+    position: 'absolute',
+    left: 0,
+    right: 0,
+    top: 0,
+    height: 170,
+    flexDirection: 'row',
+    justifyContent: 'space-around',
+    alignItems: 'stretch',
+  },
+  touchHit: {
+    width: 28,
   },
 });

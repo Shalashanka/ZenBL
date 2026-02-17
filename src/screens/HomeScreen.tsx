@@ -21,6 +21,7 @@ import Animated, {
   FadeInDown,
   FadeInLeft,
   FadeInRight,
+  interpolate,
   interpolateColor,
   runOnJS,
   useAnimatedStyle,
@@ -33,6 +34,8 @@ import * as Haptics from 'expo-haptics';
 import { Flame, X, Settings as SettingsIcon, UserCircle2, Clock3, ShieldBan, Target, CalendarClock, BellRing } from 'lucide-react-native';
 import { useFocusEffect, useNavigation } from '@react-navigation/native';
 import { WeeklyStat, ZenoxEngine } from '../bridge/ZenoxEngine';
+import { AppList } from './AppList';
+import { ScheduleScreen } from './ScheduleScreen';
 import { FocusCard } from '../components/FocusCard';
 import { FocusQuote } from '../components/FocusQuote';
 import { useZenoxStatus } from '../hooks/useZenoxStatus';
@@ -145,11 +148,15 @@ export const HomeScreen = () => {
   const dialLayoutRef = useRef({ x: 0, y: 0, width: DIAL_CANVAS, height: DIAL_CANVAS });
 
   const [sheetSession, setSheetSession] = useState<Session | null>(null);
+  const [isSheetOpen, setSheetOpen] = useState(false);
+  const [sheetMode, setSheetMode] = useState<'profile' | 'apps' | 'schedule'>('profile');
+  const [sheetReturnMode, setSheetReturnMode] = useState<'close' | 'profile'>('close');
   const [durationDraft, setDurationDraft] = useState(60);
   const [fortressMode, setFortressMode] = useState(false);
   const [enterKey, setEnterKey] = useState(0);
 
   const sheetY = useSharedValue(sheetHeight);
+  const sheetExpandProgress = useSharedValue(0);
   const backdropOpacity = useSharedValue(0);
   const menuX = useSharedValue(width);
   const menuBackdropOpacity = useSharedValue(0);
@@ -234,7 +241,7 @@ export const HomeScreen = () => {
   }, [animateThemeCascade, status.isActive]);
 
   useEffect(() => {
-    if (!sheetSession) return;
+    if (!isSheetOpen) return;
 
     sheetY.value = sheetHeight;
     backdropOpacity.value = 0;
@@ -251,7 +258,7 @@ export const HomeScreen = () => {
         easing: Easing.out(Easing.quad),
       })
     );
-  }, [sheetSession, sheetHeight, backdropOpacity, sheetY]);
+  }, [isSheetOpen, sheetHeight, backdropOpacity, sheetY]);
 
   useEffect(() => {
     if (!isMenuOpen) {
@@ -278,6 +285,9 @@ export const HomeScreen = () => {
 
   const sheetStyle = useAnimatedStyle(() => ({
     transform: [{ translateY: sheetY.value }],
+    height: interpolate(sheetExpandProgress.value, [0, 1], [sheetHeight, height]),
+    borderTopLeftRadius: interpolate(sheetExpandProgress.value, [0, 1], [Theme.radius.xl, 0]),
+    borderTopRightRadius: interpolate(sheetExpandProgress.value, [0, 1], [Theme.radius.xl, 0]),
   }));
 
   const menuStyle = useAnimatedStyle(() => ({
@@ -359,6 +369,10 @@ export const HomeScreen = () => {
 
   const openSessionSheet = (session: Session) => {
     setSheetSession(session);
+    setSheetMode('profile');
+    setSheetReturnMode('close');
+    setSheetOpen(true);
+    sheetExpandProgress.value = withTiming(0, { duration: 220, easing: Easing.out(Easing.cubic) });
     setDurationDraft(session.durationMinutes);
     setFortressMode(false);
     Haptics.selectionAsync().catch(() => undefined);
@@ -366,14 +380,20 @@ export const HomeScreen = () => {
 
   const closeSessionSheet = useCallback(() => {
     backdropOpacity.value = withTiming(0, { duration: 140, easing: Easing.out(Easing.quad) });
+    sheetExpandProgress.value = withTiming(0, { duration: 160, easing: Easing.out(Easing.quad) });
     sheetY.value = withTiming(
       sheetHeight,
       { duration: 280, easing: Easing.in(Easing.cubic) },
       (finished) => {
-        if (finished) runOnJS(setSheetSession)(null);
+        if (finished) {
+          runOnJS(setSheetSession)(null);
+          runOnJS(setSheetMode)('profile');
+          runOnJS(setSheetReturnMode)('close');
+          runOnJS(setSheetOpen)(false);
+        }
       }
     );
-  }, [backdropOpacity, sheetHeight, sheetY]);
+  }, [backdropOpacity, sheetExpandProgress, sheetHeight, sheetY]);
 
   const syncBlockedAppsBeforeStart = useCallback(async () => {
     let currentBlocked = blockedApps;
@@ -557,9 +577,37 @@ export const HomeScreen = () => {
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light).catch(() => undefined);
   };
 
+  const openFullSheet = useCallback((mode: 'apps' | 'schedule', returnMode: 'close' | 'profile') => {
+    setSheetMode(mode);
+    setSheetReturnMode(returnMode);
+    setSheetOpen(true);
+    sheetExpandProgress.value = withTiming(1, { duration: 340, easing: Easing.out(Easing.cubic) });
+  }, [sheetExpandProgress]);
+
   const goToBlockedApps = () => {
-    navigation.navigate('AppList');
+    if (sheetSession) {
+      openFullSheet('apps', 'profile');
+      return;
+    }
+    openFullSheet('apps', 'close');
   };
+
+  const goToSchedules = () => {
+    if (sheetSession) {
+      openFullSheet('schedule', 'profile');
+      return;
+    }
+    openFullSheet('schedule', 'close');
+  };
+
+  const returnFromFullSheet = useCallback(() => {
+    if (sheetReturnMode === 'profile' && sheetSession) {
+      setSheetMode('profile');
+      sheetExpandProgress.value = withTiming(0, { duration: 320, easing: Easing.out(Easing.cubic) });
+      return;
+    }
+    closeSessionSheet();
+  }, [closeSessionSheet, sheetExpandProgress, sheetReturnMode, sheetSession]);
 
   const openSideMenu = () => {
     setMenuOpen(true);
@@ -584,12 +632,14 @@ export const HomeScreen = () => {
 
   const openAppsFromMenu = () => {
     closeSideMenu();
-    navigation.navigate('AppList');
+    setSheetSession(null);
+    openFullSheet('apps', 'close');
   };
 
   const openSchedulesFromMenu = () => {
     closeSideMenu();
-    navigation.navigate('Schedule');
+    setSheetSession(null);
+    openFullSheet('schedule', 'close');
   };
 
   const openNotificationPermissionFromMenu = () => {
@@ -607,6 +657,10 @@ export const HomeScreen = () => {
 
   const snapModal = (deltaY: number) => {
     if (deltaY > 120) {
+      if ((sheetMode === 'apps' || sheetMode === 'schedule') && sheetReturnMode === 'profile' && sheetSession) {
+        returnFromFullSheet();
+        return;
+      }
       closeSessionSheet();
       return;
     }
@@ -616,14 +670,16 @@ export const HomeScreen = () => {
   const sheetPanResponder = useMemo(
     () =>
       PanResponder.create({
+        onStartShouldSetPanResponderCapture: () => false,
+        onStartShouldSetPanResponder: () => false,
         onMoveShouldSetPanResponderCapture: (_, gesture) => {
           const isVerticalPull = gesture.dy > 8 && Math.abs(gesture.dy) > Math.abs(gesture.dx);
-          const atTop = modalScrollY.current <= 8;
-          const strongPullDown = gesture.dy > 22 && gesture.vy > 0.6;
+          const atTop = modalScrollY.current <= 20;
+          const strongPullDown = gesture.dy > 24;
           return isVerticalPull && (atTop || strongPullDown);
         },
         onMoveShouldSetPanResponder: (_, gesture) =>
-          modalScrollY.current <= 8 && gesture.dy > 8 && Math.abs(gesture.dy) > Math.abs(gesture.dx),
+          modalScrollY.current <= 20 && gesture.dy > 8 && Math.abs(gesture.dy) > Math.abs(gesture.dx),
         onPanResponderGrant: () => {
           sheetDragStartY.current = sheetY.value;
         },
@@ -633,8 +689,9 @@ export const HomeScreen = () => {
         onPanResponderRelease: (_, gesture) => {
           snapModal(gesture.dy);
         },
+        onShouldBlockNativeResponder: () => true,
       }),
-    [sheetY]
+    [returnFromFullSheet, sheetMode, sheetReturnMode, sheetSession, sheetY]
   );
 
   const sideMenuPanResponder = useMemo(
@@ -672,6 +729,30 @@ export const HomeScreen = () => {
   const dialAngle = sliderRatio * Math.PI * 2 - Math.PI / 2;
   const knobX = DIAL_CANVAS / 2 + TIMER_RADIUS * Math.cos(dialAngle);
   const knobY = DIAL_CANVAS / 2 + TIMER_RADIUS * Math.sin(dialAngle);
+  const isZenPalette = status.isActive || optimisticZen;
+  const statPalette = isZenPalette
+    ? {
+        primaryBg: '#2B7A5E',
+        primaryBorder: '#3E9D7B',
+        primaryText: '#DBFFF1',
+        secondary1Bg: '#1E6E64',
+        secondary1Border: '#2E8D81',
+        secondary1Text: '#D9FFF9',
+        secondary2Bg: '#346EA9',
+        secondary2Border: '#4A87C7',
+        secondary2Text: '#E0F0FF',
+      }
+    : {
+        primaryBg: '#EF6A3E',
+        primaryBorder: '#F38B68',
+        primaryText: '#FFEADD',
+        secondary1Bg: '#226A58',
+        secondary1Border: '#2F8A73',
+        secondary1Text: '#D1FFF2',
+        secondary2Bg: '#2E4FB7',
+        secondary2Border: '#4E73E0',
+        secondary2Text: '#E0E8FF',
+      };
 
   return (
     <Animated.View style={[styles.container, pageBackgroundStyle]}>
@@ -763,31 +844,31 @@ export const HomeScreen = () => {
         </Animated.View>
 
         <Animated.View key={`stats-${enterKey}`} entering={FadeInDown.duration(620).delay(140)} style={styles.bentleyGrid}>
-          <Animated.View style={[styles.primaryStatCard, { backgroundColor: '#EF6A3E', borderColor: '#F38B68' }]}>
+          <Animated.View style={[styles.primaryStatCard, { backgroundColor: statPalette.primaryBg, borderColor: statPalette.primaryBorder }]}>
             <View style={styles.statIconWrap}>
               <Clock3 color="#FFFFFF" size={16} />
               <Text style={styles.statMetaOnColor}>{stats[0].meta}</Text>
             </View>
             <Text style={[styles.primaryStatValue, { color: colors.text }]}>{stats[0].value}</Text>
-            <Text style={[styles.primaryStatLabel, { color: '#FFEADD' }]}>{stats[0].label}</Text>
+            <Text style={[styles.primaryStatLabel, { color: statPalette.primaryText }]}>{stats[0].label}</Text>
           </Animated.View>
 
           <View style={styles.secondaryStatsCol}>
-            <Animated.View style={[styles.secondaryStatCard, { backgroundColor: '#226A58', borderColor: '#2F8A73' }]}>
+            <Animated.View style={[styles.secondaryStatCard, { backgroundColor: statPalette.secondary1Bg, borderColor: statPalette.secondary1Border }]}>
               <View style={styles.statIconWrap}>
                 <ShieldBan color="#FFFFFF" size={15} />
                 <Text style={styles.statMetaOnColor}>{stats[1].meta}</Text>
               </View>
               <Text style={[styles.secondaryStatValue, { color: colors.text }]}>{stats[1].value}</Text>
-              <Text style={[styles.secondaryStatLabel, { color: '#D1FFF2' }]}>{stats[1].label}</Text>
+              <Text style={[styles.secondaryStatLabel, { color: statPalette.secondary1Text }]}>{stats[1].label}</Text>
             </Animated.View>
-            <Animated.View style={[styles.secondaryStatCard, { backgroundColor: '#2E4FB7', borderColor: '#4E73E0' }]}>
+            <Animated.View style={[styles.secondaryStatCard, { backgroundColor: statPalette.secondary2Bg, borderColor: statPalette.secondary2Border }]}>
               <View style={styles.statIconWrap}>
                 <Target color="#FFFFFF" size={15} />
                 <Text style={styles.statMetaOnColor}>{stats[2].meta}</Text>
               </View>
               <Text style={[styles.secondaryStatValue, { color: colors.text }]}>{stats[2].value}</Text>
-              <Text style={[styles.secondaryStatLabel, { color: '#E0E8FF' }]}>{stats[2].label}</Text>
+              <Text style={[styles.secondaryStatLabel, { color: statPalette.secondary2Text }]}>{stats[2].label}</Text>
             </Animated.View>
           </View>
         </Animated.View>
@@ -873,17 +954,17 @@ export const HomeScreen = () => {
         </Animated.View>
       </Modal>
 
-      <Modal animationType="none" transparent visible={!!sheetSession} onRequestClose={closeSessionSheet}>
+      <Modal animationType="none" transparent visible={isSheetOpen} onRequestClose={closeSessionSheet}>
         <View style={styles.sheetRoot}>
           <Animated.View style={[styles.sheetBackdrop, backdropStyle]}>
             <TouchableOpacity style={StyleSheet.absoluteFill} activeOpacity={1} onPress={closeSessionSheet} />
           </Animated.View>
 
           <Animated.View
-            style={[styles.sheet, { height: sheetHeight, backgroundColor: colors.surface, borderColor: colors.border }, sheetStyle]}
+            style={[styles.sheet, { backgroundColor: colors.surface, borderColor: colors.border }, sheetStyle]}
             {...sheetPanResponder.panHandlers}
           >
-            {sheetSession ? (
+            {sheetMode === 'profile' && sheetSession ? (
               <ScrollView
                 showsVerticalScrollIndicator={false}
                 contentContainerStyle={styles.sheetScrollContent}
@@ -964,6 +1045,18 @@ export const HomeScreen = () => {
                   </TouchableOpacity>
                 </Animated.View>
               </ScrollView>
+            ) : null}
+
+            {sheetMode === 'apps' ? (
+              <View style={styles.sheetNestedContent}>
+                <AppList onClose={returnFromFullSheet} />
+              </View>
+            ) : null}
+
+            {sheetMode === 'schedule' ? (
+              <View style={styles.sheetNestedContent}>
+                <ScheduleScreen onClose={returnFromFullSheet} />
+              </View>
             ) : null}
           </Animated.View>
         </View>
@@ -1263,6 +1356,10 @@ const styles = StyleSheet.create({
   },
   sheetScrollContent: {
     paddingBottom: 8,
+  },
+  sheetNestedContent: {
+    flex: 1,
+    marginTop: 8,
   },
   sheetTitle: {
     fontSize: 26,

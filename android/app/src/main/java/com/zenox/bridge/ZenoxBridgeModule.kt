@@ -423,67 +423,158 @@ class ZenoxBridgeModule(
     fun getWeeklyStats(promise: Promise) {
         bridgeScope.launch {
             try {
-                val usageManager = reactApplicationContext
-                    .getSystemService(Context.USAGE_STATS_SERVICE) as UsageStatsManager
-                val blockedPackages = blockedAppDao.getBlockedApps().map { it.packageName }.toSet()
-                val ownPackage = reactApplicationContext.packageName
-                val dayFormat = SimpleDateFormat("EEE", Locale.US)
-                val result = Arguments.createArray()
-
-                for (offset in 6 downTo 0) {
-                    val dayStartCal = Calendar.getInstance().apply {
-                        add(Calendar.DAY_OF_YEAR, -offset)
-                        set(Calendar.HOUR_OF_DAY, 0)
-                        set(Calendar.MINUTE, 0)
-                        set(Calendar.SECOND, 0)
-                        set(Calendar.MILLISECOND, 0)
-                    }
-                    val dayStart = dayStartCal.timeInMillis
-                    val dayEnd = dayStart + 24L * 60L * 60L * 1000L
-
-                    // Proxy metric for "focus minutes": user-app foreground time, excluding this app.
-                    val usageStats = usageManager.queryUsageStats(
-                        UsageStatsManager.INTERVAL_DAILY,
-                        dayStart,
-                        dayEnd,
-                    )
-                    val totalUserForegroundMs = usageStats
-                        .asSequence()
-                        .filter { stat ->
-                            stat.packageName != ownPackage && isUserApp(stat.packageName)
-                        }
-                        .sumOf { it.totalTimeInForeground.coerceAtLeast(0L) }
-                    val minutes = (totalUserForegroundMs / 60000L).toInt()
-
-                    // Attempts: number of blocked-package foreground launches in that day.
-                    var attempts = 0
-                    if (blockedPackages.isNotEmpty()) {
-                        val events = usageManager.queryEvents(dayStart, dayEnd)
-                        val event = UsageEvents.Event()
-                        while (events.hasNextEvent()) {
-                            events.getNextEvent(event)
-                            if (
-                                event.eventType == UsageEvents.Event.MOVE_TO_FOREGROUND &&
-                                blockedPackages.contains(event.packageName)
-                            ) {
-                                attempts++
-                            }
-                        }
-                    }
-
-                    result.pushMap(
-                        Arguments.createMap().apply {
-                            putString("day", dayFormat.format(dayStartCal.time))
-                            putInt("minutes", minutes)
-                            putInt("attempts", attempts)
-                        },
-                    )
-                }
-
+                val result = queryDailyStats(7)
                 promise.resolve(result)
             } catch (exception: Exception) {
                 Log.e(TAG, "getWeeklyStats failed", exception)
                 promise.reject("GET_WEEKLY_STATS_FAILED", exception.message, exception)
+            }
+        }
+    }
+
+    @ReactMethod
+    fun getDashboardSummary(promise: Promise) {
+        bridgeScope.launch {
+            try {
+                val weekly = queryDailyStats(7)
+                var weekMinutes = 0
+                var weekAttempts = 0
+                var todayMinutes = 0
+                var todayAttempts = 0
+                for (i in 0 until weekly.size()) {
+                    val entry = weekly.getMap(i) ?: continue
+                    val minutes = entry.getInt("minutes")
+                    val attempts = entry.getInt("attempts")
+                    weekMinutes += minutes
+                    weekAttempts += attempts
+                    if (i == weekly.size() - 1) {
+                        todayMinutes = minutes
+                        todayAttempts = attempts
+                    }
+                }
+
+                val blockedCount = blockedAppDao.getBlockedCount()
+                val goalProgressPct = ((weekMinutes.toFloat() / 300f) * 100f).toInt().coerceIn(0, 100)
+                val streakDays = (weekMinutes / 120).coerceAtLeast(0)
+
+                val map = Arguments.createMap().apply {
+                    putInt("todayMinutes", todayMinutes)
+                    putInt("weekMinutes", weekMinutes)
+                    putInt("attemptsToday", todayAttempts)
+                    putInt("attemptsWeek", weekAttempts)
+                    putInt("blockedAppsCount", blockedCount)
+                    putInt("goalProgressPct", goalProgressPct)
+                    putInt("currentStreakDays", streakDays)
+                }
+                promise.resolve(map)
+            } catch (exception: Exception) {
+                Log.e(TAG, "getDashboardSummary failed", exception)
+                promise.reject("GET_DASHBOARD_SUMMARY_FAILED", exception.message, exception)
+            }
+        }
+    }
+
+    @ReactMethod
+    fun getTopBlockedApps(limit: Int, promise: Promise) {
+        bridgeScope.launch {
+            try {
+                val usageManager = reactApplicationContext
+                    .getSystemService(Context.USAGE_STATS_SERVICE) as UsageStatsManager
+                val blockedApps = blockedAppDao.getBlockedApps()
+                val blockedPackages = blockedApps.map { it.packageName }.toSet()
+                val appNameByPackage = blockedApps.associate { it.packageName to it.appName }
+                val cappedLimit = limit.coerceIn(1, 20)
+
+                val now = Calendar.getInstance()
+                val todayStart = Calendar.getInstance().apply {
+                    timeInMillis = now.timeInMillis
+                    set(Calendar.HOUR_OF_DAY, 0)
+                    set(Calendar.MINUTE, 0)
+                    set(Calendar.SECOND, 0)
+                    set(Calendar.MILLISECOND, 0)
+                }.timeInMillis
+                val weekStart = Calendar.getInstance().apply {
+                    timeInMillis = now.timeInMillis
+                    add(Calendar.DAY_OF_YEAR, -6)
+                    set(Calendar.HOUR_OF_DAY, 0)
+                    set(Calendar.MINUTE, 0)
+                    set(Calendar.SECOND, 0)
+                    set(Calendar.MILLISECOND, 0)
+                }.timeInMillis
+                val end = now.timeInMillis
+
+                val attemptsToday = mutableMapOf<String, Int>()
+                val attemptsWeek = mutableMapOf<String, Int>()
+
+                if (blockedPackages.isNotEmpty()) {
+                    val todayEvents = usageManager.queryEvents(todayStart, end)
+                    val weekEvents = usageManager.queryEvents(weekStart, end)
+                    val event = UsageEvents.Event()
+                    while (todayEvents.hasNextEvent()) {
+                        todayEvents.getNextEvent(event)
+                        if (event.eventType == UsageEvents.Event.MOVE_TO_FOREGROUND && blockedPackages.contains(event.packageName)) {
+                            attemptsToday[event.packageName] = (attemptsToday[event.packageName] ?: 0) + 1
+                        }
+                    }
+                    while (weekEvents.hasNextEvent()) {
+                        weekEvents.getNextEvent(event)
+                        if (event.eventType == UsageEvents.Event.MOVE_TO_FOREGROUND && blockedPackages.contains(event.packageName)) {
+                            attemptsWeek[event.packageName] = (attemptsWeek[event.packageName] ?: 0) + 1
+                        }
+                    }
+                }
+
+                val sorted = blockedApps
+                    .map { app ->
+                        val week = attemptsWeek[app.packageName] ?: 0
+                        val today = attemptsToday[app.packageName] ?: 0
+                        Triple(app.packageName, today, week)
+                    }
+                    .sortedByDescending { it.third }
+                    .take(cappedLimit)
+
+                val result = Arguments.createArray()
+                sorted.forEach { (packageName, today, week) ->
+                    result.pushMap(
+                        Arguments.createMap().apply {
+                            putString("packageName", packageName)
+                            putString("appName", appNameByPackage[packageName] ?: packageName)
+                            putInt("attemptsToday", today)
+                            putInt("attemptsWeek", week)
+                        },
+                    )
+                }
+                promise.resolve(result)
+            } catch (exception: Exception) {
+                Log.e(TAG, "getTopBlockedApps failed", exception)
+                promise.reject("GET_TOP_BLOCKED_APPS_FAILED", exception.message, exception)
+            }
+        }
+    }
+
+    @ReactMethod
+    fun getSessionHistory(days: Int, promise: Promise) {
+        bridgeScope.launch {
+            try {
+                val cappedDays = days.coerceIn(1, 60)
+                val history = queryDailyStats(cappedDays)
+                val result = Arguments.createArray()
+                for (i in 0 until history.size()) {
+                    val item = history.getMap(i) ?: continue
+                    result.pushMap(
+                        Arguments.createMap().apply {
+                            putString("id", "${item.getString("day")}-${i}")
+                            putString("day", item.getString("day"))
+                            putInt("minutes", item.getInt("minutes"))
+                            putInt("attempts", item.getInt("attempts"))
+                            putString("source", "usage_stats")
+                        },
+                    )
+                }
+                promise.resolve(result)
+            } catch (exception: Exception) {
+                Log.e(TAG, "getSessionHistory failed", exception)
+                promise.reject("GET_SESSION_HISTORY_FAILED", exception.message, exception)
             }
         }
     }
@@ -553,6 +644,66 @@ class ZenoxBridgeModule(
         val safeHour = hour.coerceIn(0, 23)
         val safeMinute = minute.coerceIn(0, 59)
         return "%02d:%02d".format(safeHour, safeMinute)
+    }
+
+    private suspend fun queryDailyStats(days: Int): com.facebook.react.bridge.WritableArray {
+        val usageManager = reactApplicationContext
+            .getSystemService(Context.USAGE_STATS_SERVICE) as UsageStatsManager
+        val blockedPackages = blockedAppDao.getBlockedApps().map { it.packageName }.toSet()
+        val ownPackage = reactApplicationContext.packageName
+        val dayFormat = SimpleDateFormat("EEE", Locale.US)
+        val result = Arguments.createArray()
+        val window = days.coerceIn(1, 60)
+
+        for (offset in (window - 1) downTo 0) {
+            val dayStartCal = Calendar.getInstance().apply {
+                add(Calendar.DAY_OF_YEAR, -offset)
+                set(Calendar.HOUR_OF_DAY, 0)
+                set(Calendar.MINUTE, 0)
+                set(Calendar.SECOND, 0)
+                set(Calendar.MILLISECOND, 0)
+            }
+            val dayStart = dayStartCal.timeInMillis
+            val dayEnd = dayStart + 24L * 60L * 60L * 1000L
+
+            val usageStats = usageManager.queryUsageStats(
+                UsageStatsManager.INTERVAL_DAILY,
+                dayStart,
+                dayEnd,
+            )
+            val totalUserForegroundMs = usageStats
+                .asSequence()
+                .filter { stat ->
+                    stat.packageName != ownPackage && isUserApp(stat.packageName)
+                }
+                .sumOf { it.totalTimeInForeground.coerceAtLeast(0L) }
+            val minutes = (totalUserForegroundMs / 60000L).toInt()
+
+            var attempts = 0
+            if (blockedPackages.isNotEmpty()) {
+                val events = usageManager.queryEvents(dayStart, dayEnd)
+                val event = UsageEvents.Event()
+                while (events.hasNextEvent()) {
+                    events.getNextEvent(event)
+                    if (
+                        event.eventType == UsageEvents.Event.MOVE_TO_FOREGROUND &&
+                        blockedPackages.contains(event.packageName)
+                    ) {
+                        attempts++
+                    }
+                }
+            }
+
+            result.pushMap(
+                Arguments.createMap().apply {
+                    putString("day", dayFormat.format(dayStartCal.time))
+                    putInt("minutes", minutes)
+                    putInt("attempts", attempts)
+                },
+            )
+        }
+
+        return result
     }
 
     private fun isUserApp(packageName: String): Boolean {

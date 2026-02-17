@@ -5,7 +5,7 @@ import Animated, { FadeInUp } from 'react-native-reanimated';
 import { useFocusEffect } from '@react-navigation/native';
 import { AppScanner, AppInfo } from '../services/AppScanner';
 import { useZenoxStatus } from '../hooks/useZenoxStatus';
-import { ZenoxEngine, WeeklyStat } from '../bridge/ZenoxEngine';
+import { DashboardSummary, TopBlockedApp, WeeklyStat, ZenoxEngine } from '../bridge/ZenoxEngine';
 import { FocusChart } from '../components/FocusChart';
 import { Theme, getThemeColors } from '../theme/Theme';
 
@@ -19,13 +19,6 @@ const FALLBACK_WEEK: WeeklyStat[] = [
   { day: 'Sun', minutes: 48, attempts: 5 },
 ];
 
-const BLOCKED = [
-  { app: 'Instagram', attempts: 78 },
-  { app: 'TikTok', attempts: 64 },
-  { app: 'YouTube', attempts: 51 },
-  { app: 'X', attempts: 44 },
-];
-
 export const DashboardScreen = () => {
   const status = useZenoxStatus();
   const colors = getThemeColors(status.isActive);
@@ -33,6 +26,8 @@ export const DashboardScreen = () => {
   const [enterKey, setEnterKey] = useState(0);
   const [weeklyStats, setWeeklyStats] = useState<WeeklyStat[]>([]);
   const [installedApps, setInstalledApps] = useState<AppInfo[]>([]);
+  const [summary, setSummary] = useState<DashboardSummary | null>(null);
+  const [topBlocked, setTopBlocked] = useState<TopBlockedApp[]>([]);
 
   useFocusEffect(
     React.useCallback(() => {
@@ -40,12 +35,21 @@ export const DashboardScreen = () => {
 
       const load = async () => {
         try {
-          const [stats, apps] = await Promise.all([ZenoxEngine.getWeeklyStats(), AppScanner.getInstalledApps()]);
+          const [stats, apps, dashboardSummary, blocked] = await Promise.all([
+            ZenoxEngine.getWeeklyStats(),
+            AppScanner.getInstalledApps(),
+            ZenoxEngine.getDashboardSummary(),
+            ZenoxEngine.getTopBlockedApps(4),
+          ]);
           setWeeklyStats(stats);
           setInstalledApps(apps);
+          setSummary(dashboardSummary);
+          setTopBlocked(blocked);
         } catch {
           setWeeklyStats([]);
           setInstalledApps([]);
+          setSummary(null);
+          setTopBlocked([]);
         }
       };
 
@@ -65,8 +69,8 @@ export const DashboardScreen = () => {
   const hasWeeklyData = weeklyStats.some((item) => item.minutes > 0 || item.attempts > 0);
   const effectiveStats = hasWeeklyData ? weeklyStats : FALLBACK_WEEK;
   const totalMinutes = effectiveStats.reduce((acc, item) => acc + item.minutes, 0);
-  const currentStreak = Math.max(1, Math.round(totalMinutes / 120));
-  const topBlocked = BLOCKED[0];
+  const currentStreak = summary?.currentStreakDays ?? Math.max(1, Math.round(totalMinutes / 120));
+  const topBlockedItem = topBlocked[0];
 
   return (
     <SafeAreaView style={[styles.container, { backgroundColor: colors.background }]} edges={['top']}>
@@ -99,7 +103,7 @@ export const DashboardScreen = () => {
             style={[styles.largeCard, { backgroundColor: colors.surface, borderColor: colors.border }]}
           >
             <Text style={[styles.cardTitle, { color: colors.text }]}>Time Saved Today</Text>
-            <Text style={[styles.largeNumber, { color: colors.accent }]}>{Math.round(totalMinutes * 0.55)}m</Text>
+            <Text style={[styles.largeNumber, { color: colors.accent }]}>{summary?.todayMinutes ?? Math.round(totalMinutes * 0.55)}m</Text>
           </Animated.View>
 
           <View style={styles.rightCol}>
@@ -119,17 +123,17 @@ export const DashboardScreen = () => {
             >
               <Text style={[styles.smallLabel, { color: colors.mutedText }]}>Most Blocked</Text>
               <View style={styles.topBlockedRow}>
-                {iconByAppName.get(topBlocked.app.toLowerCase()) ? (
+                {topBlockedItem && iconByAppName.get(topBlockedItem.appName.toLowerCase()) ? (
                   <Image
-                    source={{ uri: `data:image/png;base64,${iconByAppName.get(topBlocked.app.toLowerCase())}` }}
+                    source={{ uri: `data:image/png;base64,${iconByAppName.get(topBlockedItem.appName.toLowerCase())}` }}
                     style={styles.appIcon}
                   />
                 ) : (
                   <View style={styles.fallbackIcon}>
-                    <Text style={styles.fallbackIconText}>{topBlocked.app[0]}</Text>
+                    <Text style={styles.fallbackIconText}>{topBlockedItem?.appName?.[0] ?? 'A'}</Text>
                   </View>
                 )}
-                <Text style={[styles.smallValue, { color: colors.text }]}>{topBlocked.app}</Text>
+                <Text style={[styles.smallValue, { color: colors.text }]}>{topBlockedItem?.appName ?? 'None'}</Text>
               </View>
             </Animated.View>
           </View>
@@ -141,24 +145,27 @@ export const DashboardScreen = () => {
           style={[styles.card, { backgroundColor: colors.surface, borderColor: colors.border }]}
         >
           <Text style={[styles.cardTitle, { color: colors.text }]}>App Graveyard</Text>
-          {BLOCKED.map((item) => {
-            const maxAttempts = BLOCKED[0].attempts;
-            const width = `${Math.round((item.attempts / maxAttempts) * 100)}%` as `${number}%`;
-            const icon = iconByAppName.get(item.app.toLowerCase());
+          {topBlocked.length === 0 ? (
+            <Text style={[styles.emptyText, { color: colors.mutedText }]}>No blocked app attempts yet.</Text>
+          ) : null}
+          {topBlocked.map((item) => {
+            const maxAttempts = Math.max(topBlocked[0]?.attemptsWeek ?? 1, 1);
+            const width = `${Math.round((item.attemptsWeek / maxAttempts) * 100)}%` as `${number}%`;
+            const icon = iconByAppName.get(item.appName.toLowerCase());
             return (
-              <View key={item.app} style={styles.row}>
+              <View key={item.packageName} style={styles.row}>
                 <View style={styles.rowHeader}>
                   <View style={styles.appCell}>
                     {icon ? (
                       <Image source={{ uri: `data:image/png;base64,${icon}` }} style={styles.appIcon} />
                     ) : (
                       <View style={styles.fallbackIcon}>
-                        <Text style={styles.fallbackIconText}>{item.app[0]}</Text>
+                        <Text style={styles.fallbackIconText}>{item.appName[0]}</Text>
                       </View>
                     )}
-                    <Text style={[styles.rowName, { color: colors.text }]}>{item.app}</Text>
+                    <Text style={[styles.rowName, { color: colors.text }]}>{item.appName}</Text>
                   </View>
-                  <Text style={[styles.rowPct, { color: colors.mutedText }]}>{item.attempts}</Text>
+                  <Text style={[styles.rowPct, { color: colors.mutedText }]}>{item.attemptsWeek}</Text>
                 </View>
                 <View style={styles.progressTrack}>
                   <View style={[styles.progressFill, { width, backgroundColor: Theme.colors.accent }]} />
@@ -181,8 +188,7 @@ const styles = StyleSheet.create({
   },
   title: {
     fontSize: Theme.type.h1,
-    fontWeight: '700',
-    fontFamily: 'serif',
+    fontFamily: 'SNPro_Bold',
   },
   card: {
     borderRadius: Theme.radius.lg,
@@ -191,11 +197,12 @@ const styles = StyleSheet.create({
   },
   cardTitle: {
     fontSize: Theme.type.h2,
-    fontWeight: '700',
+    fontFamily: 'SNPro_Bold',
     marginBottom: Theme.spacing.md,
   },
   emptyText: {
     fontSize: Theme.type.body,
+    fontFamily: 'SNPro_Regular',
   },
   grid: {
     flexDirection: 'row',
@@ -222,14 +229,15 @@ const styles = StyleSheet.create({
   },
   largeNumber: {
     fontSize: 42,
-    fontWeight: '700',
+    fontFamily: 'SNPro_Bold',
   },
   smallLabel: {
     fontSize: Theme.type.caption,
+    fontFamily: 'SNPro_Regular',
   },
   smallValue: {
     fontSize: Theme.type.body,
-    fontWeight: '700',
+    fontFamily: 'SNPro_Bold',
   },
   topBlockedRow: {
     flexDirection: 'row',
@@ -264,16 +272,16 @@ const styles = StyleSheet.create({
   },
   fallbackIconText: {
     color: '#f5f5f5',
-    fontWeight: '700',
+    fontFamily: 'SNPro_Bold',
     fontSize: 12,
   },
   rowName: {
     fontSize: Theme.type.body,
-    fontWeight: '600',
+    fontFamily: 'SNPro_Bold',
   },
   rowPct: {
     fontSize: Theme.type.body,
-    fontWeight: '600',
+    fontFamily: 'SNPro_Bold',
   },
   progressTrack: {
     marginTop: 8,

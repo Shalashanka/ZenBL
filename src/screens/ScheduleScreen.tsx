@@ -5,10 +5,14 @@ import { AppScanner } from '../services/AppScanner';
 import { useZenStore } from '../store/zenStore';
 import { useNavigation } from '@react-navigation/native';
 import { ZenoxEngine } from '../bridge/ZenoxEngine';
+import { SafeAreaView } from 'react-native-safe-area-context';
+import { useZenoxStatus } from '../hooks/useZenoxStatus';
+import { getThemeColors } from '../theme/Theme';
 
 export const ScheduleScreen = ({ onClose }: { onClose?: () => void }) => {
     const navigation = useNavigation<any>();
-    console.log('📅 ScheduleScreen Component Rendered');
+    const status = useZenoxStatus();
+    const colors = getThemeColors(status.isActive);
     const {
         schedules,
         fetchSchedules,
@@ -225,11 +229,11 @@ export const ScheduleScreen = ({ onClose }: { onClose?: () => void }) => {
     );
 
     return (
-        <View style={styles.container}>
+        <SafeAreaView style={[styles.container, { backgroundColor: colors.background }]} edges={['top', 'bottom']}>
             <View style={styles.header}>
-                <Text style={styles.title}>Schedules</Text>
+                <Text style={[styles.title, { color: colors.text }]}>Schedules</Text>
                 <TouchableOpacity onPress={() => (onClose ? onClose() : navigation.goBack())}>
-                    <Text style={styles.closeText}>Done</Text>
+                    <Text style={[styles.closeText, { color: colors.text }]}>Done</Text>
                 </TouchableOpacity>
             </View>
 
@@ -245,34 +249,35 @@ export const ScheduleScreen = ({ onClose }: { onClose?: () => void }) => {
             </TouchableOpacity>
 
             <Modal visible={isModalVisible} animationType="slide" presentationStyle="pageSheet">
-                <View style={styles.modalContent}>
-                    <Text style={styles.modalTitle}>{editingId ? 'Edit Schedule' : 'New Zen Schedule'}</Text>
+                <SafeAreaView style={[styles.modalContent, { backgroundColor: colors.background }]} edges={['top', 'bottom']}>
+                    <Text style={[styles.modalTitle, { color: colors.text }]}>{editingId ? 'Edit Schedule' : 'New Zen Schedule'}</Text>
 
-                    <Text style={styles.label}>Schedule Name</Text>
+                    <Text style={[styles.label, { color: colors.text }]}>Schedule Name</Text>
                     <TextInput
-                        style={styles.input}
+                        style={[styles.input, { backgroundColor: colors.surface, color: colors.text, borderColor: colors.border }]}
                         placeholder="e.g. Morning Focus"
+                        placeholderTextColor={colors.mutedText}
                         value={scheduleName}
                         onChangeText={setScheduleName}
                     />
 
-                    <Text style={styles.label}>Recurrence</Text>
+                    <Text style={[styles.label, { color: colors.text }]}>Recurrence</Text>
                     <View style={styles.recurrenceRow}>
                         <TouchableOpacity
                             style={[styles.recurrenceBtn, recurrenceType === 'daily' && styles.recurrenceBtnSelected]}
                             onPress={() => setRecurrenceType('daily')}>
-                            <Text style={[styles.recurrenceText, recurrenceType === 'daily' && styles.recurrenceTextSelected]}>Daily</Text>
+                            <Text style={[styles.recurrenceText, { color: colors.text }, recurrenceType === 'daily' && styles.recurrenceTextSelected]}>Daily</Text>
                         </TouchableOpacity>
                         <TouchableOpacity
                             style={[styles.recurrenceBtn, recurrenceType === 'custom' && styles.recurrenceBtnSelected]}
                             onPress={() => setRecurrenceType('custom')}>
-                            <Text style={[styles.recurrenceText, recurrenceType === 'custom' && styles.recurrenceTextSelected]}>Custom</Text>
+                            <Text style={[styles.recurrenceText, { color: colors.text }, recurrenceType === 'custom' && styles.recurrenceTextSelected]}>Custom</Text>
                         </TouchableOpacity>
                     </View>
 
                     {recurrenceType === 'custom' && (
                         <>
-                            <Text style={styles.label}>Days</Text>
+                            <Text style={[styles.label, { color: colors.text }]}>Days</Text>
                             <View style={styles.daysRow}>
                                 {days.map((day, index) => (
                                     <TouchableOpacity
@@ -280,7 +285,7 @@ export const ScheduleScreen = ({ onClose }: { onClose?: () => void }) => {
                                         style={[styles.dayChip, selectedDays.includes(index) && styles.dayChipSelected]}
                                         onPress={() => toggleDay(index)}
                                     >
-                                        <Text style={[styles.dayChipText, selectedDays.includes(index) && styles.dayChipTextSelected]}>
+                                        <Text style={[styles.dayChipText, { color: colors.text }, selectedDays.includes(index) && styles.dayChipTextSelected]}>
                                             {day}
                                         </Text>
                                     </TouchableOpacity>
@@ -289,12 +294,12 @@ export const ScheduleScreen = ({ onClose }: { onClose?: () => void }) => {
                         </>
                     )}
 
-                    <Text style={styles.label}>Blocking Strategy</Text>
+                    <Text style={[styles.label, { color: colors.text }]}>Blocking Strategy</Text>
                     <View style={styles.recurrenceRow}>
                         <TouchableOpacity
                             style={[styles.recurrenceBtn, blockMode === 'global' && styles.recurrenceBtnSelected]}
                             onPress={() => setBlockMode('global')}>
-                            <Text style={[styles.recurrenceText, blockMode === 'global' && styles.recurrenceTextSelected]}>Global List</Text>
+                            <Text style={[styles.recurrenceText, { color: colors.text }, blockMode === 'global' && styles.recurrenceTextSelected]}>Global List</Text>
                         </TouchableOpacity>
                         <TouchableOpacity
                             style={[styles.recurrenceBtn, blockMode === 'custom' && styles.recurrenceBtnSelected]}
@@ -302,17 +307,17 @@ export const ScheduleScreen = ({ onClose }: { onClose?: () => void }) => {
                                 setBlockMode('custom');
                                 if (installedApps.length === 0) loadApps();
                             }}>
-                            <Text style={[styles.recurrenceText, blockMode === 'custom' && styles.recurrenceTextSelected]}>Specific Apps</Text>
+                            <Text style={[styles.recurrenceText, { color: colors.text }, blockMode === 'custom' && styles.recurrenceTextSelected]}>Specific Apps</Text>
                         </TouchableOpacity>
                     </View>
 
                     {blockMode === 'custom' && (
                         <TouchableOpacity
-                            style={styles.selectAppsBtn}
+                            style={[styles.selectAppsBtn, { backgroundColor: colors.surface, borderColor: colors.border }]}
                             onPress={openAppPicker}
                             disabled={appsLoading}
                         >
-                            <Text style={styles.selectAppsText}>
+                            <Text style={[styles.selectAppsText, { color: colors.accent }]}>
                                 {appsLoading
                                     ? 'Loading apps…'
                                     : specificApps.length > 0
@@ -322,14 +327,14 @@ export const ScheduleScreen = ({ onClose }: { onClose?: () => void }) => {
                         </TouchableOpacity>
                     )}
 
-                    <Text style={styles.label}>Time Range</Text>
+                    <Text style={[styles.label, { color: colors.text }]}>Time Range</Text>
                     <View style={styles.timeRow}>
-                        <TouchableOpacity style={styles.timeBtn} onPress={() => setShowStartPicker(true)}>
-                            <Text>Start: {formatTime(startTime)}</Text>
+                        <TouchableOpacity style={[styles.timeBtn, { backgroundColor: colors.surface, borderColor: colors.border }]} onPress={() => setShowStartPicker(true)}>
+                            <Text style={{ color: colors.text }}>Start: {formatTime(startTime)}</Text>
                         </TouchableOpacity>
-                        <Text>to</Text>
-                        <TouchableOpacity style={styles.timeBtn} onPress={() => setShowEndPicker(true)}>
-                            <Text>End: {formatTime(endTime)}</Text>
+                        <Text style={{ color: colors.text }}>to</Text>
+                        <TouchableOpacity style={[styles.timeBtn, { backgroundColor: colors.surface, borderColor: colors.border }]} onPress={() => setShowEndPicker(true)}>
+                            <Text style={{ color: colors.text }}>End: {formatTime(endTime)}</Text>
                         </TouchableOpacity>
                     </View>
 
@@ -363,29 +368,29 @@ export const ScheduleScreen = ({ onClose }: { onClose?: () => void }) => {
                     )}
 
                     <View style={styles.actionRow}>
-                        <TouchableOpacity onPress={() => setModalVisible(false)} style={styles.cancelBtn}>
-                            <Text style={styles.cancelText}>Cancel</Text>
+                        <TouchableOpacity onPress={() => setModalVisible(false)} style={[styles.cancelBtn, { borderColor: colors.border }]}>
+                            <Text style={[styles.cancelText, { color: colors.text }]}>Cancel</Text>
                         </TouchableOpacity>
-                        <TouchableOpacity onPress={saveSchedule} style={styles.saveBtn}>
+                        <TouchableOpacity onPress={saveSchedule} style={[styles.saveBtn, { backgroundColor: colors.accent }]}>
                             <Text style={styles.saveText}>Save</Text>
                         </TouchableOpacity>
                     </View>
-                </View>
+                </SafeAreaView>
             </Modal>
 
             {/* App Picker Modal */}
             <Modal visible={isAppPickerVisible} animationType="slide" presentationStyle="pageSheet">
-                <View style={styles.modalContent}>
-                    <Text style={styles.modalTitle}>Select Apps to Block</Text>
+                <SafeAreaView style={[styles.modalContent, { backgroundColor: colors.background }]} edges={['top', 'bottom']}>
+                    <Text style={[styles.modalTitle, { color: colors.text }]}>Select Apps to Block</Text>
                     {appsLoading && installedApps.length === 0 ? (
-                        <Text style={styles.loadingText}>Loading apps…</Text>
+                        <Text style={[styles.loadingText, { color: colors.mutedText }]}>Loading apps…</Text>
                     ) : (
                     <FlatList
                         data={installedApps}
                         keyExtractor={item => item.packageName}
                         renderItem={({ item }) => (
                             <TouchableOpacity
-                                style={styles.appItem}
+                                style={[styles.appItem, { borderBottomColor: colors.border }]}
                                 onPress={() => {
                                     if (specificApps.includes(item.packageName)) {
                                         setSpecificApps(specificApps.filter(p => p !== item.packageName));
@@ -394,65 +399,65 @@ export const ScheduleScreen = ({ onClose }: { onClose?: () => void }) => {
                                     }
                                 }}
                             >
-                                <Text style={styles.appName}>{item.appName}</Text>
+                                <Text style={[styles.appName, { color: colors.text }]}>{item.appName}</Text>
                                 {specificApps.includes(item.packageName) && <Text style={styles.checkMark}>✓</Text>}
                             </TouchableOpacity>
                         )}
                     />
                     )}
-                    <TouchableOpacity onPress={() => setAppPickerVisible(false)} style={[styles.saveBtn, { marginTop: 20 }]}>
+                    <TouchableOpacity onPress={() => setAppPickerVisible(false)} style={[styles.saveBtn, { marginTop: 20, backgroundColor: colors.accent }]}>
                         <Text style={styles.saveText}>Done</Text>
                     </TouchableOpacity>
-                </View>
+                </SafeAreaView>
             </Modal>
-        </View>
+        </SafeAreaView>
     );
 };
 
 const styles = StyleSheet.create({
-    container: { flex: 1, backgroundColor: '#f2f2f7', paddingTop: 50 },
-    header: { flexDirection: 'row', justifyContent: 'space-between', paddingHorizontal: 20, marginBottom: 20 },
-    title: { fontSize: 28, fontWeight: 'bold' },
-    closeText: { fontSize: 17, color: '#007AFF', fontWeight: '600' },
-    card: { backgroundColor: '#fff', borderRadius: 12, padding: 16, marginHorizontal: 20, marginBottom: 12 },
+    container: { flex: 1, paddingTop: 8 },
+    header: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', paddingHorizontal: 16, marginBottom: 12 },
+    title: { fontSize: 26, fontFamily: 'SNPro_Bold' },
+    closeText: { fontSize: 15, fontFamily: 'SNPro_Bold' },
+    card: { backgroundColor: '#2D313A', borderRadius: 14, padding: 14, marginHorizontal: 16, marginBottom: 10, borderWidth: 1, borderColor: '#3A3F4A' },
     cardHeader: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' },
-    dayText: { fontSize: 18, fontWeight: '600' },
-    timeText: { fontSize: 16, color: '#666', marginTop: 4 },
-    detailText: { fontSize: 12, color: '#007AFF', marginTop: 2, fontStyle: 'italic' },
+    dayText: { fontSize: 17, color: '#F5F7FA', fontFamily: 'SNPro_Bold' },
+    timeText: { fontSize: 15, color: '#A8B0BE', marginTop: 4, fontFamily: 'SNPro_Regular' },
+    detailText: { fontSize: 12, color: '#FF8A62', marginTop: 4, fontFamily: 'SNPro_Regular' },
     deleteBtn: { marginTop: 10, alignSelf: 'flex-start' },
-    deleteText: { color: 'red', fontSize: 14 },
-    fab: { position: 'absolute', bottom: 40, right: 20, width: 56, height: 56, borderRadius: 28, backgroundColor: '#007AFF', justifyContent: 'center', alignItems: 'center', elevation: 5 },
+    deleteText: { color: '#FF6B6B', fontSize: 14, fontFamily: 'SNPro_Bold' },
+    fab: { position: 'absolute', bottom: 40, right: 20, width: 56, height: 56, borderRadius: 28, backgroundColor: '#FF7043', justifyContent: 'center', alignItems: 'center', elevation: 5 },
     fabText: { color: '#fff', fontSize: 30 },
-    miniDayBadge: { fontSize: 12, backgroundColor: '#eee', marginRight: 4, paddingHorizontal: 4, borderRadius: 4, overflow: 'hidden', color: '#555' },
+    miniDayBadge: { fontSize: 11, backgroundColor: '#3B404B', marginRight: 4, paddingHorizontal: 6, paddingVertical: 2, borderRadius: 8, overflow: 'hidden', color: '#D7DCE6' },
 
     // Modal
-    modalContent: { flex: 1, padding: 20, paddingTop: 50, backgroundColor: '#fff' },
-    modalTitle: { fontSize: 24, fontWeight: 'bold', marginBottom: 30 },
-    label: { fontSize: 16, fontWeight: '600', marginBottom: 10, marginTop: 20 },
+    modalContent: { flex: 1, padding: 16, paddingTop: 10 },
+    modalTitle: { fontSize: 24, fontFamily: 'SNPro_Bold', marginBottom: 20 },
+    label: { fontSize: 15, fontFamily: 'SNPro_Bold', marginBottom: 10, marginTop: 18 },
     daysRow: { flexDirection: 'row', justifyContent: 'space-between' },
-    dayChip: { width: 40, height: 40, borderRadius: 20, backgroundColor: '#eee', justifyContent: 'center', alignItems: 'center' },
-    dayChipSelected: { backgroundColor: '#007AFF' },
-    dayChipText: { color: '#333' },
+    dayChip: { width: 40, height: 40, borderRadius: 20, backgroundColor: '#3A3F4A', justifyContent: 'center', alignItems: 'center' },
+    dayChipSelected: { backgroundColor: '#FF7043' },
+    dayChipText: { fontFamily: 'SNPro_Bold' },
     dayChipTextSelected: { color: '#fff' },
     timeRow: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' },
-    timeBtn: { padding: 10, backgroundColor: '#eee', borderRadius: 8 },
+    timeBtn: { padding: 10, borderRadius: 10, borderWidth: 1 },
     actionRow: { flexDirection: 'row', justifyContent: 'space-between', marginTop: 50 },
-    cancelBtn: { padding: 15 },
-    cancelText: { color: 'red', fontSize: 18 },
-    saveBtn: { padding: 15, backgroundColor: '#007AFF', borderRadius: 8, paddingHorizontal: 30 },
-    saveText: { color: '#fff', fontSize: 18, fontWeight: '600' },
-    input: { backgroundColor: '#eee', padding: 12, borderRadius: 8, fontSize: 16, marginBottom: 10 },
+    cancelBtn: { padding: 12, borderRadius: 10, borderWidth: 1 },
+    cancelText: { fontSize: 16, fontFamily: 'SNPro_Bold' },
+    saveBtn: { padding: 14, borderRadius: 10, paddingHorizontal: 30 },
+    saveText: { color: '#fff', fontSize: 16, fontFamily: 'SNPro_Bold' },
+    input: { padding: 12, borderRadius: 10, fontSize: 15, marginBottom: 10, borderWidth: 1, fontFamily: 'SNPro_Regular' },
     recurrenceRow: { flexDirection: 'row', marginBottom: 20 },
-    recurrenceBtn: { padding: 10, borderRadius: 8, borderWidth: 1, borderColor: '#ccc', marginRight: 10 },
-    recurrenceBtnSelected: { backgroundColor: '#007AFF', borderColor: '#007AFF' },
-    recurrenceText: { color: '#333' },
+    recurrenceBtn: { padding: 10, borderRadius: 10, borderWidth: 1, borderColor: '#4A505E', marginRight: 10, backgroundColor: '#2E333D' },
+    recurrenceBtnSelected: { backgroundColor: '#FF7043', borderColor: '#FF7043' },
+    recurrenceText: { fontFamily: 'SNPro_Regular' },
     recurrenceTextSelected: { color: '#fff' },
 
-    selectAppsBtn: { padding: 15, backgroundColor: '#f0f0f5', borderRadius: 8, marginBottom: 20, alignItems: 'center', borderWidth: 1, borderColor: '#ddd' },
-    selectAppsText: { fontSize: 16, color: '#007AFF', fontWeight: '500' },
+    selectAppsBtn: { padding: 14, borderRadius: 10, marginBottom: 20, alignItems: 'center', borderWidth: 1 },
+    selectAppsText: { fontSize: 15, fontFamily: 'SNPro_Bold' },
 
-    appItem: { flexDirection: 'row', justifyContent: 'space-between', padding: 15, borderBottomWidth: 1, borderBottomColor: '#eee', alignItems: 'center' },
-    appName: { fontSize: 16 },
-    checkMark: { color: '#007AFF', fontWeight: 'bold', fontSize: 18 },
-    loadingText: { fontSize: 16, color: '#666', padding: 20, textAlign: 'center' as const },
+    appItem: { flexDirection: 'row', justifyContent: 'space-between', padding: 14, borderBottomWidth: 1, alignItems: 'center' },
+    appName: { fontSize: 16, fontFamily: 'SNPro_Regular' },
+    checkMark: { color: '#FF7043', fontFamily: 'SNPro_Bold', fontSize: 18 },
+    loadingText: { fontSize: 15, padding: 20, textAlign: 'center' as const, fontFamily: 'SNPro_Regular' },
 });
