@@ -1,14 +1,24 @@
 import React from 'react';
-import { View } from 'react-native';
-import { NavigationContainer } from '@react-navigation/native';
-import { RootNavigator } from './src/navigation/RootNavigator';
+import { NavigationContainer, DarkTheme } from '@react-navigation/native';
+import { AppNavigator } from './src/navigation/TabNavigator';
+import { Theme } from './src/theme/Theme';
+
+const navTheme = {
+  ...DarkTheme,
+  colors: {
+    ...DarkTheme.colors,
+    background: Theme.colors.background,
+    card: Theme.colors.surface,
+    text: Theme.colors.text,
+    border: Theme.colors.border,
+    primary: Theme.colors.accent,
+  },
+};
 
 export default function App() {
   return (
-    <NavigationContainer>
-      <View style={{ flex: 1 }}>
-        <RootNavigator />
-      </View>
+    <NavigationContainer theme={navTheme}>
+      <AppNavigator />
     </NavigationContainer>
   );
 }

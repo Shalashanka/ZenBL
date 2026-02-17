@@ -1,400 +1,467 @@
-import React, { useEffect, useMemo, useState } from 'react';
+import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import {
-  Dimensions,
+  FlatList,
   Image,
-  NativeScrollEvent,
-  NativeSyntheticEvent,
-  Pressable,
+  Modal,
+  PanResponder,
+  ScrollView,
   StyleSheet,
   Text,
+  TextInput,
   TouchableOpacity,
   View,
+  useWindowDimensions,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import Animated, {
   Easing,
-  Extrapolation,
-  interpolate,
+  FadeInDown,
+  FadeInLeft,
+  FadeInRight,
   runOnJS,
-  useAnimatedScrollHandler,
   useAnimatedStyle,
   useSharedValue,
-  withSpring,
+  withDelay,
   withTiming,
 } from 'react-native-reanimated';
-import { LinearGradient } from 'expo-linear-gradient';
-import type { SharedValue } from 'react-native-reanimated';
-import { GongButton } from '../components/GongButton';
-import { ZenoxEngine, ZenProfilePayload } from '../bridge/ZenoxEngine';
+import AsyncStorage from '@react-native-async-storage/async-storage';
+import * as Haptics from 'expo-haptics';
+import { Bell, Flame } from 'lucide-react-native';
+import { useFocusEffect, useNavigation } from '@react-navigation/native';
+import { ZenoxEngine } from '../bridge/ZenoxEngine';
+import { FocusCard } from '../components/FocusCard';
+import { FocusQuote } from '../components/FocusQuote';
 import { useZenoxStatus } from '../hooks/useZenoxStatus';
-import { palette } from '../theme/palette';
+import { useZenStore } from '../store/zenStore';
+import { Theme, getThemeColors } from '../theme/Theme';
 
-const { width: SCREEN_WIDTH, height: SCREEN_HEIGHT } = Dimensions.get('window');
-const CARD_HEIGHT = SCREEN_HEIGHT - 130;
-const CARD_WIDTH = SCREEN_WIDTH - 24;
-const CARD_INSET_X = 12;
-const CARD_INSET_TOP = 12;
-const CARD_INSET_BOTTOM = 12;
-const CARD_VISIBLE_HEIGHT = CARD_HEIGHT - CARD_INSET_TOP - CARD_INSET_BOTTOM;
-const HERO_MOVE_END = 0.84;
-const HERO_SECONDARY_START = 0.9;
-const EXPAND_SPRING = {
-  damping: 20,
-  stiffness: 70,
-  mass: 1.2,
-  overshootClamping: false,
-  restDisplacementThreshold: 0.001,
-  restSpeedThreshold: 0.001,
-} as const;
-const COLLAPSE_SPRING = {
-  damping: 20,
-  stiffness: 96,
-  mass: 1.0,
-  overshootClamping: false,
-  restDisplacementThreshold: 0.001,
-  restSpeedThreshold: 0.001,
-} as const;
-
-const PROFILES: ZenProfilePayload[] = [
-  { id: 1, name: 'Deep Work', blockedApps: ['com.instagram.android', 'com.zhiliaoapp.musically'] },
-  { id: 2, name: 'Social Detox', blockedApps: ['com.instagram.android', 'com.facebook.katana', 'com.twitter.android'] },
-  { id: 3, name: 'Sleep', blockedApps: ['com.netflix.mediaclient', 'com.google.android.youtube'] },
-];
-
-const PROFILE_IMAGES = [
-  Image.resolveAssetSource(require('../../assets/profiles/deep-work.jpg')).uri,
-  Image.resolveAssetSource(require('../../assets/profiles/social-detox.jpg')).uri,
-  Image.resolveAssetSource(require('../../assets/profiles/sleep.jpg')).uri,
-];
-
-const PROFILE_OPTIONS = ['Edit Profile', 'Edit Block List', 'Schedules', 'Notes'];
-
-type ProfileCardProps = {
-  index: number;
-  profile: ZenProfilePayload;
+type Session = {
+  id: string;
+  title: string;
+  durationMinutes: number;
+  icon: 'focus' | 'pomodoro' | 'detox' | 'sleep';
+  description: string;
+  blockedApps: string[];
   imageUri: string;
-  active: boolean;
-  carouselTop: number;
-  scrollX: SharedValue<number>;
-  onOpen: () => void;
 };
 
-type AnimatedOptionRowProps = {
-  index: number;
-  label: string;
-  expandProgress: SharedValue<number>;
-};
+const SESSIONS: Session[] = [
+  {
+    id: 'deep-work',
+    title: 'Deep Work',
+    durationMinutes: 60,
+    icon: 'focus',
+    description: 'High-focus mode for coding, writing, and strategic work.',
+    blockedApps: ['Instagram', 'TikTok', 'YouTube'],
+    imageUri: Image.resolveAssetSource(require('../../assets/profiles/deep-work.png')).uri,
+  },
+  {
+    id: 'pomodoro',
+    title: '25m Pomodoro',
+    durationMinutes: 25,
+    icon: 'pomodoro',
+    description: 'Fast concentration sprint with low cognitive overhead.',
+    blockedApps: ['Instagram', 'X', 'Reddit'],
+    imageUri: 'https://images.unsplash.com/photo-1469474968028-56623f02e42e?auto=format&fit=crop&w=1200&q=80',
+  },
+  {
+    id: 'social-detox',
+    title: 'Social Detox',
+    durationMinutes: 90,
+    icon: 'detox',
+    description: 'Aggressive social-media block for mental reset.',
+    blockedApps: ['Instagram', 'TikTok', 'Facebook', 'X'],
+    imageUri: Image.resolveAssetSource(require('../../assets/profiles/social-detox.png')).uri,
+  },
+  {
+    id: 'sleep-mode',
+    title: 'Sleep Prep',
+    durationMinutes: 45,
+    icon: 'sleep',
+    description: 'Wind-down profile for evening calm and no doomscrolling.',
+    blockedApps: ['YouTube', 'Netflix', 'X'],
+    imageUri: Image.resolveAssetSource(require('../../assets/profiles/sleep.png')).uri,
+  },
+];
 
-type PaginationDotProps = {
-  index: number;
-  scrollX: SharedValue<number>;
-};
+const NAME_KEY = 'zenox_local_user_name';
 
-const AnimatedOptionRow = ({ index, label, expandProgress }: AnimatedOptionRowProps) => {
-  const optionStyle = useAnimatedStyle(() => {
-    const start = HERO_SECONDARY_START + index * 0.12;
-    const end = start + 0.42;
-    return {
-      opacity: interpolate(expandProgress.value, [start, end], [0, 1], Extrapolation.CLAMP),
-      transform: [
-        { translateX: interpolate(expandProgress.value, [start, end], [72, 0], Extrapolation.CLAMP) },
-        { scale: interpolate(expandProgress.value, [start, end], [0.95, 1], Extrapolation.CLAMP) },
-      ],
-    };
-  });
-
-  return (
-    <Animated.View style={optionStyle}>
-      <TouchableOpacity style={styles.optionButton}>
-        <Text style={styles.optionText}>{label}</Text>
-      </TouchableOpacity>
-    </Animated.View>
-  );
-};
-
-const PaginationDot = ({ index, scrollX }: PaginationDotProps) => {
-  const dotStyle = useAnimatedStyle(() => {
-    const inputRange = [(index - 1) * SCREEN_WIDTH, index * SCREEN_WIDTH, (index + 1) * SCREEN_WIDTH];
-    const intensity = interpolate(scrollX.value, inputRange, [0.35, 1, 0.35], Extrapolation.CLAMP);
-    return {
-      width: interpolate(scrollX.value, inputRange, [8, 18, 8], Extrapolation.CLAMP),
-      opacity: intensity,
-      backgroundColor: `rgba(244, 235, 222, ${interpolate(
-        scrollX.value,
-        inputRange,
-        [0.45, 1, 0.45],
-        Extrapolation.CLAMP
-      )})`,
-    };
-  });
-
-  return <Animated.View style={[styles.dot, dotStyle]} />;
-};
-
-const ProfileCard = ({ index, profile, imageUri, active, carouselTop, scrollX, onOpen }: ProfileCardProps) => {
-  const containerStyle = useAnimatedStyle(() => {
-    const inputRange = [(index - 1) * SCREEN_WIDTH, index * SCREEN_WIDTH, (index + 1) * SCREEN_WIDTH];
-
-    return {
-      opacity: interpolate(scrollX.value, inputRange, [0.76, 1, 0.76], Extrapolation.CLAMP),
-      transform: [
-        { scale: interpolate(scrollX.value, inputRange, [0.94, 1, 0.94], Extrapolation.CLAMP) },
-        { translateY: interpolate(scrollX.value, inputRange, [12, 0, 12], Extrapolation.CLAMP) },
-      ],
-    };
-  });
-
-  const imageParallaxStyle = useAnimatedStyle(() => {
-    const inputRange = [(index - 1) * SCREEN_WIDTH, index * SCREEN_WIDTH, (index + 1) * SCREEN_WIDTH];
-    return {
-      transform: [{ translateX: interpolate(scrollX.value, inputRange, [-26, 0, 26], Extrapolation.CLAMP) }],
-    };
-  });
-
-  return (
-    <Animated.View style={[styles.card, containerStyle]}>
-      <Pressable style={styles.cardPressable} onPress={onOpen}>
-        <View style={styles.cardImageFrame}>
-          <Animated.Image
-            source={{ uri: imageUri }}
-            style={[
-              styles.cardImage,
-              {
-                top: -(carouselTop + CARD_INSET_TOP),
-                left: -CARD_INSET_X,
-              },
-              imageParallaxStyle,
-            ]}
-          />
-        </View>
-
-        <LinearGradient
-          colors={['rgba(8,7,6,0.00)', 'rgba(8,7,6,0.18)', 'rgba(8,7,6,0.62)', 'rgba(8, 7, 6, 0.95)']}
-          locations={[0, 0.3, 0.66, 1]}
-          style={styles.cardGradient}
-        />
-
-        <View style={styles.cardOverlay}>
-          <View style={styles.titleRow}>
-            <Text style={styles.cardTitle}>{profile.name}</Text>
-            <View style={[styles.activeTag, active ? styles.tagActive : styles.tagInactive]}>
-              <Text style={styles.activeTagText}>{active ? 'ACTIVE' : 'INACTIVE'}</Text>
-            </View>
-          </View>
-          <Text style={styles.cardText}>Blocked Apps: {profile.blockedApps.length}</Text>
-        </View>
-      </Pressable>
-    </Animated.View>
-  );
-};
+const prettyDuration = (mins: number) => `${mins} min`;
+const formatDuration = (mins: number) => `${mins} minutes`;
 
 export const HomeScreen = () => {
-  const [activeProfileIndex, setActiveProfileIndex] = useState(0);
-  const [expandedProfileIndex, setExpandedProfileIndex] = useState<number | null>(null);
-  const [carouselTop, setCarouselTop] = useState(0);
-
-  const scrollX = useSharedValue(0);
-  const zenToneProgress = useSharedValue(0);
-  const expandProgress = useSharedValue(0);
+  const navigation = useNavigation<any>();
   const status = useZenoxStatus();
+  const blockedApps = useZenStore((s) => s.blockedApps);
+  const fetchBlockedApps = useZenStore((s) => s.fetchBlockedApps);
+  const setBlockedApps = useZenStore((s) => s.setBlockedApps);
+  const colors = getThemeColors(status.isActive);
 
-  useEffect(() => {
-    zenToneProgress.value = withTiming(status.isActive ? 1 : 0, { duration: 550, easing: Easing.out(Easing.cubic) });
-  }, [status.isActive, zenToneProgress]);
+  const { height } = useWindowDimensions();
+  const sheetHeight = Math.round(height * 0.75);
 
-  const onScroll = useAnimatedScrollHandler({
-    onScroll: (event) => {
-      scrollX.value = event.contentOffset.x;
-    },
-  });
+  const [userName, setUserName] = useState('');
+  const [nameDraft, setNameDraft] = useState('');
+  const [isNameModalOpen, setNameModalOpen] = useState(false);
+  const [streakDays] = useState(6);
 
-  const syncProfile = (profile: ZenProfilePayload) => {
-    ZenoxEngine.setActiveProfile(profile);
-  };
+  const [sheetSession, setSheetSession] = useState<Session | null>(null);
+  const [durationDraft, setDurationDraft] = useState(60);
+  const [fortressMode, setFortressMode] = useState(false);
+  const [enterKey, setEnterKey] = useState(0);
 
-  const onMomentumScrollEnd = (event: NativeSyntheticEvent<NativeScrollEvent>) => {
-    const nextIndex = Math.round(event.nativeEvent.contentOffset.x / SCREEN_WIDTH);
-    if (nextIndex < 0 || nextIndex >= PROFILES.length) return;
-    setActiveProfileIndex(nextIndex);
-    syncProfile(PROFILES[nextIndex]);
-  };
+  const sheetY = useSharedValue(sheetHeight);
+  const backdropOpacity = useSharedValue(0);
+  const sheetDragStartY = useRef(0);
+  const modalScrollY = useRef(0);
 
-  const expandedProfile = useMemo(
-    () => (expandedProfileIndex === null ? null : PROFILES[expandedProfileIndex]),
-    [expandedProfileIndex]
+  useFocusEffect(
+    React.useCallback(() => {
+      setEnterKey((prev) => prev + 1);
+      return () => undefined;
+    }, [])
   );
 
-  const openProfile = (index: number) => {
-    setExpandedProfileIndex(index);
-    syncProfile(PROFILES[index]);
-    expandProgress.value = 0;
-    expandProgress.value = withSpring(1, EXPAND_SPRING);
+  useEffect(() => {
+    const loadName = async () => {
+      const stored = await AsyncStorage.getItem(NAME_KEY);
+      if (!stored) {
+        setNameModalOpen(true);
+        return;
+      }
+      setUserName(stored);
+    };
+
+    loadName();
+  }, []);
+
+  useEffect(() => {
+    if (!sheetSession) return;
+
+    sheetY.value = sheetHeight;
+    backdropOpacity.value = 0;
+
+    sheetY.value = withTiming(0, {
+      duration: 500,
+      easing: Easing.out(Easing.cubic),
+    });
+
+    backdropOpacity.value = withDelay(
+      500,
+      withTiming(1, {
+        duration: 240,
+        easing: Easing.out(Easing.quad),
+      })
+    );
+  }, [sheetSession, sheetHeight, backdropOpacity, sheetY]);
+
+  const stats = useMemo(
+    () => [
+      { label: 'Focus Time', value: '2h 40m' },
+      { label: 'App Kills', value: '19' },
+      { label: 'Goal', value: '82%' },
+    ],
+    []
+  );
+
+  const backdropStyle = useAnimatedStyle(() => ({
+    opacity: backdropOpacity.value,
+  }));
+
+  const sheetStyle = useAnimatedStyle(() => ({
+    transform: [{ translateY: sheetY.value }],
+  }));
+
+  const saveName = async () => {
+    const trimmed = nameDraft.trim();
+    if (!trimmed) return;
+    await AsyncStorage.setItem(NAME_KEY, trimmed);
+    setUserName(trimmed);
+    setNameModalOpen(false);
+    Haptics.selectionAsync().catch(() => undefined);
   };
 
-  const closeExpandedProfile = () => {
-    expandProgress.value = withSpring(
-      0,
-      COLLAPSE_SPRING,
+  const openSessionSheet = (session: Session) => {
+    setSheetSession(session);
+    setDurationDraft(session.durationMinutes);
+    setFortressMode(false);
+    Haptics.selectionAsync().catch(() => undefined);
+  };
+
+  const closeSessionSheet = useCallback(() => {
+    backdropOpacity.value = withTiming(0, { duration: 140, easing: Easing.out(Easing.quad) });
+    sheetY.value = withTiming(
+      sheetHeight,
+      { duration: 280, easing: Easing.in(Easing.cubic) },
       (finished) => {
-        if (finished) runOnJS(setExpandedProfileIndex)(null);
+        if (finished) runOnJS(setSheetSession)(null);
       }
     );
+  }, [backdropOpacity, sheetHeight, sheetY]);
+
+  const syncBlockedAppsBeforeStart = useCallback(async () => {
+    let currentBlocked = blockedApps;
+    if (currentBlocked.length === 0) {
+      await fetchBlockedApps();
+      currentBlocked = useZenStore.getState().blockedApps;
+    }
+    if (currentBlocked.length > 0) {
+      await setBlockedApps(currentBlocked);
+    }
+  }, [blockedApps, fetchBlockedApps, setBlockedApps]);
+
+  const startSelectedSession = async () => {
+    if (!sheetSession) return;
+    await syncBlockedAppsBeforeStart();
+    if (status.isActive) {
+      ZenoxEngine.stopZen();
+    } else {
+      ZenoxEngine.startZen(durationDraft * 60, fortressMode);
+    }
+    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light).catch(() => undefined);
+    closeSessionSheet();
   };
 
-  const expandedBoundsStyle = useAnimatedStyle(() => ({
-    top: interpolate(expandProgress.value, [0, 1], [carouselTop + CARD_INSET_TOP, 0], Extrapolation.CLAMP),
-    left: interpolate(expandProgress.value, [0, 1], [CARD_INSET_X, 0], Extrapolation.CLAMP),
-    width: interpolate(expandProgress.value, [0, 1], [CARD_WIDTH, SCREEN_WIDTH], Extrapolation.CLAMP),
-    height: interpolate(expandProgress.value, [0, 1], [CARD_VISIBLE_HEIGHT, SCREEN_HEIGHT], Extrapolation.CLAMP),
-    borderRadius: interpolate(expandProgress.value, [0, 0.9, 1], [18, 18, 0], Extrapolation.CLAMP),
-  }));
+  const startInstantZen = async () => {
+    await syncBlockedAppsBeforeStart();
+    if (status.isActive) {
+      ZenoxEngine.stopZen();
+    } else {
+      ZenoxEngine.startZen(60);
+    }
+    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light).catch(() => undefined);
+  };
 
-  const expandedImageStyle = useAnimatedStyle(() => ({
-    width: SCREEN_WIDTH,
-    height: SCREEN_HEIGHT,
-    top: -interpolate(expandProgress.value, [0, 1], [carouselTop + CARD_INSET_TOP, 0], Extrapolation.CLAMP),
-    left: -interpolate(expandProgress.value, [0, 1], [CARD_INSET_X, 0], Extrapolation.CLAMP),
-  }));
+  const goToBlockedApps = () => {
+    closeSessionSheet();
+    navigation.navigate('AppList');
+  };
 
-  const expandedContentStyle = useAnimatedStyle(() => ({
-    opacity: interpolate(expandProgress.value, [0, 0.1], [0, 1], Extrapolation.CLAMP),
-  }));
+  const increaseDuration = () => setDurationDraft((prev) => Math.min(prev + 5, 180));
+  const decreaseDuration = () => setDurationDraft((prev) => Math.max(prev - 5, 10));
 
-  const heroMetaStyle = useAnimatedStyle(() => ({
-    top: interpolate(
-      expandProgress.value,
-      [0, HERO_MOVE_END],
-      [CARD_VISIBLE_HEIGHT - 84, 90],
-      Extrapolation.CLAMP
-    ),
-    opacity: interpolate(expandProgress.value, [0, 0.08, HERO_MOVE_END], [0, 1, 1], Extrapolation.CLAMP),
-    transform: [{ translateY: interpolate(expandProgress.value, [0, HERO_MOVE_END], [18, 0], Extrapolation.CLAMP) }],
-  }));
+  const handleModalPullDown = (deltaY: number) => {
+    if (deltaY <= 0) return;
+    sheetY.value = Math.min(sheetHeight, sheetDragStartY.current + deltaY);
+  };
 
-  const backButtonAnimStyle = useAnimatedStyle(() => ({
-    opacity: interpolate(
-      expandProgress.value,
-      [HERO_SECONDARY_START, HERO_SECONDARY_START + 0.22],
-      [0, 1],
-      Extrapolation.CLAMP
-    ),
-    transform: [
-      {
-        translateX: interpolate(
-          expandProgress.value,
-          [HERO_SECONDARY_START, HERO_SECONDARY_START + 0.22],
-          [-12, 0],
-          Extrapolation.CLAMP
-        ),
-      },
-    ],
-  }));
+  const snapModal = (deltaY: number) => {
+    if (deltaY > 120) {
+      closeSessionSheet();
+      return;
+    }
+    sheetY.value = withTiming(0, { duration: 220, easing: Easing.out(Easing.cubic) });
+  };
 
-  const zenToneStyle = useAnimatedStyle(() => ({
-    opacity: zenToneProgress.value,
-  }));
-
-  const blurOverlayStyle = useAnimatedStyle(() => {
-    const baseBlur = interpolate(expandProgress.value, [0, 1], [0, 0.16], Extrapolation.CLAMP);
-    const zenBoost = interpolate(zenToneProgress.value, [0, 1], [0, 0.22], Extrapolation.CLAMP);
-    return {
-      opacity: baseBlur + zenBoost,
-    };
-  });
+  const sheetPanResponder = useMemo(
+    () =>
+      PanResponder.create({
+        onMoveShouldSetPanResponderCapture: (_, gesture) => {
+          const isVerticalPull = gesture.dy > 8 && Math.abs(gesture.dy) > Math.abs(gesture.dx);
+          const atTop = modalScrollY.current <= 8;
+          const strongPullDown = gesture.dy > 22 && gesture.vy > 0.6;
+          return isVerticalPull && (atTop || strongPullDown);
+        },
+        onMoveShouldSetPanResponder: (_, gesture) =>
+          modalScrollY.current <= 8 && gesture.dy > 8 && Math.abs(gesture.dy) > Math.abs(gesture.dx),
+        onPanResponderGrant: () => {
+          sheetDragStartY.current = sheetY.value;
+        },
+        onPanResponderMove: (_, gesture) => {
+          handleModalPullDown(gesture.dy);
+        },
+        onPanResponderRelease: (_, gesture) => {
+          snapModal(gesture.dy);
+        },
+      }),
+    [sheetY]
+  );
 
   return (
-    <SafeAreaView style={styles.container} edges={['top']}>
-      <View
-        style={styles.carouselWrap}
-        onLayout={(event) => {
-          setCarouselTop(event.nativeEvent.layout.y);
-        }}
-      >
-        <Animated.FlatList
-          data={PROFILES}
-          horizontal
-          pagingEnabled
-          decelerationRate="normal"
-          disableIntervalMomentum
-          snapToAlignment="start"
-          snapToInterval={SCREEN_WIDTH}
-          bounces={false}
-          showsHorizontalScrollIndicator={false}
-          keyExtractor={(item) => String(item.id)}
-          onMomentumScrollEnd={onMomentumScrollEnd}
-          onScroll={onScroll}
-          scrollEventThrottle={16}
-          renderItem={({ item, index }) => (
-            <ProfileCard
-              index={index}
-              profile={item}
-              imageUri={PROFILE_IMAGES[index % PROFILE_IMAGES.length]}
-              active={index === activeProfileIndex}
-              carouselTop={carouselTop}
-              scrollX={scrollX}
-              onOpen={() => openProfile(index)}
-            />
-          )}
-        />
-        {expandedProfile ? null : (
-          <View style={styles.paginationRow}>
-            {PROFILES.map((profile, idx) => (
-              <PaginationDot key={profile.id} index={idx} scrollX={scrollX} />
-            ))}
+    <SafeAreaView style={[styles.container, { backgroundColor: colors.background }]} edges={['top']}>
+      <ScrollView contentContainerStyle={styles.content} showsVerticalScrollIndicator={false}>
+        <Animated.View key={`header-${enterKey}`} entering={FadeInDown.duration(620)} style={styles.headerRow}>
+          <View>
+            <View style={styles.titleRow}>
+              <Text style={[styles.headerTitle, { color: colors.text }]}>Welcome </Text>
+              <Text style={[styles.headerTitle, styles.headerName, { color: colors.text }]}>{userName || 'there'}</Text>
+              <View style={styles.streakPill}>
+                <Flame color={colors.accent} size={14} />
+                <Text style={[styles.streakText, { color: colors.text }]}>{streakDays}</Text>
+              </View>
+            </View>
+            <Text style={[styles.headerSubtitle, { color: colors.mutedText }]}>Ready for a calm, focused session?</Text>
+            <FocusQuote color={colors.mutedText} />
           </View>
-        )}
-      </View>
+          <View style={[styles.headerIconWrap, { backgroundColor: colors.surface, borderColor: colors.border }]}>
+            <Bell color={colors.text} size={18} />
+          </View>
+        </Animated.View>
 
-      {expandedProfile ? (
-        <Animated.View style={[styles.expandedBounds, expandedBoundsStyle]}>
-          <Animated.Image
-            source={{ uri: PROFILE_IMAGES[expandedProfileIndex! % PROFILE_IMAGES.length] }}
-            style={[styles.expandedImage, expandedImageStyle]}
+        <Animated.View key={`carousel-${enterKey}`} entering={FadeInDown.duration(620).delay(80)}>
+          <FlatList
+            data={SESSIONS}
+            horizontal
+            snapToAlignment="start"
+            snapToInterval={266}
+            decelerationRate="fast"
+            showsHorizontalScrollIndicator={false}
+            keyExtractor={(item) => item.id}
+            contentContainerStyle={styles.carouselContent}
+            onMomentumScrollEnd={() => {
+              Haptics.selectionAsync().catch(() => undefined);
+            }}
+            renderItem={({ item }) => (
+              <FocusCard
+                title={item.title}
+                durationLabel={prettyDuration(item.durationMinutes)}
+                icon={item.icon}
+                imageUri={item.imageUri}
+                onPress={() => openSessionSheet(item)}
+              />
+            )}
           />
-          <Animated.Image
-            source={{ uri: PROFILE_IMAGES[expandedProfileIndex! % PROFILE_IMAGES.length] }}
-            blurRadius={16}
-            style={[styles.expandedImage, expandedImageStyle, blurOverlayStyle]}
-          />
-          <Animated.View style={[styles.zenToneLayer, zenToneStyle]} />
+        </Animated.View>
 
-          <LinearGradient
-            colors={['rgba(8,7,6,0.18)', 'rgba(8,7,6,0.24)', 'rgba(8,7,6,0.58)', 'rgba(8,7,6,0.84)']}
-            locations={[0, 0.42, 0.74, 1]}
-            style={styles.expandedGradient}
-          />
+        <Animated.View key={`stats-${enterKey}`} entering={FadeInDown.duration(620).delay(160)} style={styles.bentleyGrid}>
+          <View style={[styles.primaryStatCard, { backgroundColor: colors.surface, borderColor: colors.border }]}>
+            <Text style={[styles.primaryStatValue, { color: colors.text }]}>{stats[0].value}</Text>
+            <Text style={[styles.primaryStatLabel, { color: colors.mutedText }]}>{stats[0].label}</Text>
+          </View>
 
-          <Animated.View style={[styles.expandedUi, expandedContentStyle]}>
-            <SafeAreaView style={styles.expandedSafe}>
-              <View style={styles.expandedHeader}>
-                <Animated.View style={backButtonAnimStyle}>
-                  <TouchableOpacity onPress={closeExpandedProfile} style={styles.backButton}>
-                    <Text style={styles.backButtonText}>Back</Text>
+          <View style={styles.secondaryStatsCol}>
+            <View style={[styles.secondaryStatCard, { backgroundColor: colors.surface, borderColor: colors.border }]}>
+              <Text style={[styles.secondaryStatValue, { color: colors.text }]}>{stats[1].value}</Text>
+              <Text style={[styles.secondaryStatLabel, { color: colors.mutedText }]}>{stats[1].label}</Text>
+            </View>
+            <View style={[styles.secondaryStatCard, { backgroundColor: colors.surface, borderColor: colors.border }]}>
+              <Text style={[styles.secondaryStatValue, { color: colors.text }]}>{stats[2].value}</Text>
+              <Text style={[styles.secondaryStatLabel, { color: colors.mutedText }]}>{stats[2].label}</Text>
+            </View>
+          </View>
+        </Animated.View>
+
+        <Animated.View key={`cta-${enterKey}`} entering={FadeInDown.duration(620).delay(240)}>
+          <TouchableOpacity style={[styles.instantButton, { backgroundColor: colors.accent }]} onPress={startInstantZen}>
+            <Text style={[styles.instantButtonText, { color: colors.text }]}>{status.isActive ? 'End Zen' : 'Instant Zen'}</Text>
+          </TouchableOpacity>
+        </Animated.View>
+      </ScrollView>
+
+      <Modal animationType="none" transparent visible={!!sheetSession} onRequestClose={closeSessionSheet}>
+        <View style={styles.sheetRoot}>
+          <Animated.View style={[styles.sheetBackdrop, backdropStyle]}>
+            <TouchableOpacity style={StyleSheet.absoluteFill} activeOpacity={1} onPress={closeSessionSheet} />
+          </Animated.View>
+
+          <Animated.View
+            style={[styles.sheet, { height: sheetHeight, backgroundColor: colors.surface, borderColor: colors.border }, sheetStyle]}
+            {...sheetPanResponder.panHandlers}
+          >
+            {sheetSession ? (
+              <ScrollView
+                showsVerticalScrollIndicator={false}
+                contentContainerStyle={styles.sheetScrollContent}
+                onScroll={(event) => {
+                  modalScrollY.current = event.nativeEvent.contentOffset.y;
+                  if (event.nativeEvent.contentOffset.y < -40) {
+                    closeSessionSheet();
+                  }
+                }}
+                onScrollEndDrag={(event) => {
+                  const y = event.nativeEvent.contentOffset.y;
+                  const vy = event.nativeEvent.velocity?.y ?? 0;
+                  if (y <= 2 && vy < -0.9) {
+                    closeSessionSheet();
+                  }
+                }}
+                scrollEventThrottle={16}
+                bounces
+                alwaysBounceVertical
+              >
+                <View style={styles.sheetDragArea}>
+                  <Animated.View entering={FadeInDown.duration(760)} style={styles.sheetGrabber} />
+                </View>
+
+                <Animated.View entering={FadeInDown.duration(760).delay(80)}>
+                  <Text style={[styles.sheetTitle, { color: colors.text }]}>{sheetSession.title}</Text>
+                  <Text style={[styles.sheetSubtitle, { color: colors.mutedText }]}>{sheetSession.description}</Text>
+                </Animated.View>
+
+                <Animated.View entering={FadeInRight.duration(760).delay(150)} style={styles.detailRow}>
+                  <Text style={[styles.detailLabel, { color: colors.text }]}>Session Length</Text>
+                  <View style={styles.durationAdjuster}>
+                    <TouchableOpacity style={[styles.adjustBtn, { borderColor: colors.border }]} onPress={decreaseDuration}>
+                      <Text style={[styles.adjustBtnText, { color: colors.text }]}>-</Text>
+                    </TouchableOpacity>
+                    <Text style={[styles.durationValue, { color: colors.text }]}>{formatDuration(durationDraft)}</Text>
+                    <TouchableOpacity style={[styles.adjustBtn, { borderColor: colors.border }]} onPress={increaseDuration}>
+                      <Text style={[styles.adjustBtnText, { color: colors.text }]}>+</Text>
+                    </TouchableOpacity>
+                  </View>
+                </Animated.View>
+
+                <Animated.View entering={FadeInLeft.duration(760).delay(220)} style={styles.detailRow}>
+                  <Text style={[styles.detailLabel, { color: colors.text }]}>Blocked Apps</Text>
+                  <View style={styles.appChips}>
+                    {sheetSession.blockedApps.map((app) => (
+                      <View key={app} style={[styles.appChip, { borderColor: colors.border }]}>
+                        <Text style={[styles.appChipText, { color: colors.text }]}>{app}</Text>
+                      </View>
+                    ))}
+                  </View>
+                </Animated.View>
+
+                <Animated.View entering={FadeInRight.duration(760).delay(300)} style={styles.detailRow}>
+                  <Text style={[styles.detailLabel, { color: colors.text }]}>Customize</Text>
+                  <View style={styles.toggleRow}>
+                    <TouchableOpacity
+                      style={[styles.modePill, { borderColor: colors.border }, !fortressMode ? { backgroundColor: colors.accent, borderColor: colors.accent } : null]}
+                      onPress={() => setFortressMode(false)}
+                    >
+                      <Text style={[styles.modePillText, { color: !fortressMode ? colors.text : colors.mutedText }]}>Normal</Text>
+                    </TouchableOpacity>
+                    <TouchableOpacity
+                      style={[styles.modePill, { borderColor: colors.border }, fortressMode ? { backgroundColor: colors.accent, borderColor: colors.accent } : null]}
+                      onPress={() => setFortressMode(true)}
+                    >
+                      <Text style={[styles.modePillText, { color: fortressMode ? colors.text : colors.mutedText }]}>Fortress</Text>
+                    </TouchableOpacity>
+                  </View>
+                </Animated.View>
+
+                <Animated.View entering={FadeInDown.duration(760).delay(360)} style={styles.sheetActions}>
+                  <TouchableOpacity style={[styles.secondaryBtn, { borderColor: colors.border }]} onPress={goToBlockedApps}>
+                    <Text style={[styles.secondaryBtnText, { color: colors.text }]}>Change Blocked Apps</Text>
+                  </TouchableOpacity>
+                  <TouchableOpacity style={[styles.primaryBtn, { backgroundColor: colors.accent }]} onPress={startSelectedSession}>
+                    <Text style={[styles.primaryBtnText, { color: colors.text }]}>{status.isActive ? 'End Session' : 'Start Session'}</Text>
                   </TouchableOpacity>
                 </Animated.View>
-              </View>
-
-              <Animated.View style={[styles.heroMeta, heroMetaStyle]}>
-                <View style={styles.titleRow}>
-                  <Text style={styles.expandedTitle}>{expandedProfile.name}</Text>
-                  <View style={styles.tagActive}>
-                    <Text style={styles.activeTagText}>ACTIVE</Text>
-                  </View>
-                </View>
-                <Text style={styles.expandedSub}>Blocked Apps: {expandedProfile.blockedApps.length}</Text>
-              </Animated.View>
-
-              <View style={styles.optionsContainer}>
-                {PROFILE_OPTIONS.map((option, idx) => (
-                  <AnimatedOptionRow key={option} index={idx} label={option} expandProgress={expandProgress} />
-                ))}
-              </View>
-            </SafeAreaView>
-
-            <GongButton visible />
+              </ScrollView>
+            ) : null}
           </Animated.View>
-        </Animated.View>
-      ) : null}
+        </View>
+      </Modal>
+
+      <Modal animationType="fade" transparent visible={isNameModalOpen}>
+        <View style={styles.nameBackdrop}>
+          <View style={[styles.nameCard, { backgroundColor: colors.surface, borderColor: colors.border }]}>
+            <Text style={[styles.nameTitle, { color: colors.text }]}>Welcome to Zenox</Text>
+            <Text style={[styles.nameSubtitle, { color: colors.mutedText }]}>What should we call you?</Text>
+            <TextInput
+              value={nameDraft}
+              onChangeText={setNameDraft}
+              style={[styles.nameInput, { borderColor: colors.border, color: colors.text }]}
+              placeholder="Your name"
+              placeholderTextColor={colors.mutedText}
+            />
+            <TouchableOpacity style={[styles.nameButton, { backgroundColor: colors.accent }]} onPress={saveName}>
+              <Text style={[styles.nameButtonText, { color: colors.text }]}>Continue</Text>
+            </TouchableOpacity>
+          </View>
+        </View>
+      </Modal>
     </SafeAreaView>
   );
 };
@@ -402,178 +469,275 @@ export const HomeScreen = () => {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: palette.inkSoft,
   },
-  title: {
-    fontSize: 24,
-    fontWeight: '700',
-    color: palette.textPrimary,
-    paddingHorizontal: 16,
-    marginTop: 6,
-    marginBottom: 10,
+  content: {
+    padding: Theme.spacing.md,
+    paddingBottom: Theme.spacing.xl,
+    gap: Theme.spacing.lg,
   },
-  carouselWrap: {
-    flex: 1,
-  },
-  card: {
-    width: SCREEN_WIDTH,
-    height: CARD_HEIGHT,
-    paddingHorizontal: CARD_INSET_X,
-    paddingBottom: CARD_INSET_BOTTOM,
-    paddingTop: CARD_INSET_TOP,
-  },
-  cardPressable: {
-    width: '100%',
-    height: '100%',
-    overflow: 'hidden',
-    borderRadius: 18,
-  },
-  cardImageFrame: {
-    width: '100%',
-    height: '100%',
-    overflow: 'hidden',
-    borderRadius: 18,
-  },
-  cardImage: {
-    position: 'absolute',
-    width: SCREEN_WIDTH,
-    height: SCREEN_HEIGHT,
-    backgroundColor: '#46352a',
-  },
-  cardGradient: {
-    position: 'absolute',
-    left: 0,
-    right: 0,
-    bottom: 0,
-    height: 220,
-    borderBottomLeftRadius: 18,
-    borderBottomRightRadius: 18,
-  },
-  cardOverlay: {
-    position: 'absolute',
-    left: 22,
-    right: 22,
-    bottom: 24,
+  headerRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'flex-start',
   },
   titleRow: {
     flexDirection: 'row',
     alignItems: 'center',
+    flexWrap: 'wrap',
+    gap: 4,
   },
-  cardTitle: {
-    fontSize: 24,
+  headerTitle: {
+    fontSize: Theme.type.h1,
+    fontWeight: '400',
+    fontFamily: 'Inter_900Black', // Intentional for that extra oomph
+    letterSpacing: -0.2,
+  },
+  headerName: {
+    fontStyle: 'normal',
     fontWeight: '700',
-    color: '#fff8ec',
-    marginRight: 10,
   },
-  cardText: {
-    marginTop: 8,
-    fontSize: 14,
-    color: '#eadfce',
-  },
-  activeTag: {
-    paddingVertical: 4,
-    paddingHorizontal: 8,
+  streakPill: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
     borderRadius: 999,
+    backgroundColor: '#3A3A41',
+    paddingHorizontal: 8,
+    paddingVertical: 4,
+    marginLeft: 6,
   },
-  tagActive: {
-    backgroundColor: '#3d8c4f',
-  },
-  tagInactive: {
-    backgroundColor: 'rgba(255,255,255,0.28)',
-  },
-  activeTagText: {
-    color: '#fff',
-    fontSize: 10,
-    letterSpacing: 0.6,
+  streakText: {
+    fontSize: 12,
     fontWeight: '700',
   },
-  expandedBounds: {
-    position: 'absolute',
-    overflow: 'hidden',
-    backgroundColor: '#0b0908',
-    zIndex: 100,
+  headerSubtitle: {
+    fontSize: Theme.type.body,
+    marginTop: 6,
   },
-  expandedImage: {
-    position: 'absolute',
+  headerIconWrap: {
+    width: 36,
+    height: 36,
+    borderRadius: 18,
+    alignItems: 'center',
+    justifyContent: 'center',
+    borderWidth: 1,
   },
-  zenToneLayer: {
-    ...StyleSheet.absoluteFillObject,
-    backgroundColor: '#747474',
+  carouselContent: {
+    paddingVertical: 4,
   },
-  expandedGradient: {
-    ...StyleSheet.absoluteFillObject,
+  bentleyGrid: {
+    flexDirection: 'row',
+    gap: Theme.spacing.sm,
   },
-  expandedUi: {
-    ...StyleSheet.absoluteFillObject,
-  },
-  expandedSafe: {
-    flex: 1,
+  primaryStatCard: {
+    flex: 1.4,
+    minHeight: 136,
+    borderWidth: 1,
+    borderRadius: Theme.radius.md,
+    padding: Theme.spacing.md,
     justifyContent: 'space-between',
   },
-  expandedHeader: {
-    paddingHorizontal: 14,
-    paddingTop: 4,
-    zIndex: 5,
-  },
-  backButton: {
-    alignSelf: 'flex-start',
-    backgroundColor: 'rgba(14, 12, 10, 0.56)',
-    borderRadius: 16,
-    paddingVertical: 8,
-    paddingHorizontal: 14,
-  },
-  backButtonText: {
-    color: '#f8ead7',
-    fontWeight: '600',
-    fontSize: 14,
-  },
-  heroMeta: {
-    position: 'absolute',
-    left: 20,
-    right: 20,
-  },
-  expandedTitle: {
-    color: '#f8ead7',
+  primaryStatValue: {
     fontSize: 28,
     fontWeight: '700',
-    marginRight: 10,
   },
-  expandedSub: {
-    color: '#cdb8a1',
-    marginTop: 10,
-    fontSize: 14,
+  primaryStatLabel: {
+    fontSize: Theme.type.body,
   },
-  optionsContainer: {
-    paddingHorizontal: 20,
-    paddingBottom: 150,
-    gap: 10,
+  secondaryStatsCol: {
+    flex: 1,
+    gap: Theme.spacing.sm,
   },
-  paginationRow: {
-    position: 'absolute',
-    bottom: 8,
-    left: 0,
-    right: 0,
-    flexDirection: 'row',
-    justifyContent: 'center',
+  secondaryStatCard: {
+    flex: 1,
+    borderWidth: 1,
+    borderRadius: Theme.radius.md,
+    padding: Theme.spacing.sm,
+    justifyContent: 'space-between',
+  },
+  secondaryStatValue: {
+    fontSize: 18,
+    fontWeight: '700',
+  },
+  secondaryStatLabel: {
+    fontSize: Theme.type.caption,
+  },
+  instantButton: {
+    marginTop: 4,
+    height: 56,
+    borderRadius: Theme.radius.lg,
     alignItems: 'center',
+    justifyContent: 'center',
+  },
+  instantButtonText: {
+    fontSize: 16,
+    fontWeight: '700',
+    letterSpacing: 0.3,
+  },
+  sheetRoot: {
+    flex: 1,
+    justifyContent: 'flex-end',
+  },
+  sheetBackdrop: {
+    ...StyleSheet.absoluteFillObject,
+    backgroundColor: 'rgba(0,0,0,0.45)',
+  },
+  sheet: {
+    borderTopLeftRadius: Theme.radius.xl,
+    borderTopRightRadius: Theme.radius.xl,
+    padding: Theme.spacing.lg,
+    borderWidth: 1,
+  },
+  sheetGrabber: {
+    width: 46,
+    height: 5,
+    borderRadius: 999,
+    backgroundColor: '#4B5563',
+    alignSelf: 'center',
+    marginBottom: Theme.spacing.md,
+  },
+  sheetDragArea: {
+    paddingTop: 2,
+    paddingBottom: 6,
+  },
+  sheetScrollContent: {
+    paddingBottom: 8,
+  },
+  sheetTitle: {
+    fontSize: 26,
+    fontWeight: '700',
+  },
+  sheetSubtitle: {
+    fontSize: Theme.type.body,
+    marginTop: 8,
+    marginBottom: Theme.spacing.md,
+  },
+  detailRow: {
+    marginBottom: Theme.spacing.md,
+  },
+  detailLabel: {
+    fontSize: Theme.type.h2,
+    fontWeight: '700',
+    marginBottom: 10,
+  },
+  durationAdjuster: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 12,
+  },
+  adjustBtn: {
+    width: 34,
+    height: 34,
+    borderRadius: 17,
+    backgroundColor: '#3E3E46',
+    alignItems: 'center',
+    justifyContent: 'center',
+    borderWidth: 1,
+  },
+  adjustBtnText: {
+    fontSize: 18,
+    fontWeight: '700',
+    marginTop: -1,
+  },
+  durationValue: {
+    fontSize: 16,
+    fontWeight: '600',
+  },
+  appChips: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
     gap: 8,
   },
-  dot: {
-    height: 8,
+  appChip: {
+    paddingVertical: 6,
+    paddingHorizontal: 10,
     borderRadius: 999,
-    backgroundColor: 'rgba(244, 235, 222, 0.45)',
-  },
-  optionButton: {
-    borderRadius: 10,
-    backgroundColor: 'rgba(16, 12, 9, 0.55)',
+    backgroundColor: '#3A3A41',
     borderWidth: 1,
-    borderColor: 'rgba(242, 218, 188, 0.32)',
-    paddingVertical: 12,
-    paddingHorizontal: 14,
   },
-  optionText: {
-    color: '#f4e6d1',
-    fontSize: 15,
+  appChipText: {
+    fontSize: 12,
     fontWeight: '600',
+  },
+  toggleRow: {
+    flexDirection: 'row',
+    gap: 10,
+  },
+  modePill: {
+    paddingVertical: 8,
+    paddingHorizontal: 14,
+    borderRadius: 999,
+    borderWidth: 1,
+    backgroundColor: '#3A3A41',
+  },
+  modePillText: {
+    fontWeight: '600',
+  },
+  sheetActions: {
+    marginTop: 2,
+    gap: 10,
+    paddingBottom: 8,
+  },
+  primaryBtn: {
+    height: 50,
+    borderRadius: Theme.radius.md,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  primaryBtnText: {
+    fontWeight: '700',
+    fontSize: Theme.type.body,
+  },
+  secondaryBtn: {
+    height: 44,
+    borderRadius: Theme.radius.md,
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: '#3A3A41',
+    borderWidth: 1,
+  },
+  secondaryBtnText: {
+    fontWeight: '600',
+    fontSize: Theme.type.body,
+  },
+  nameBackdrop: {
+    flex: 1,
+    backgroundColor: 'rgba(0,0,0,0.45)',
+    alignItems: 'center',
+    justifyContent: 'center',
+    padding: Theme.spacing.lg,
+  },
+  nameCard: {
+    width: '100%',
+    borderWidth: 1,
+    borderRadius: Theme.radius.xl,
+    padding: Theme.spacing.lg,
+  },
+  nameTitle: {
+    fontSize: Theme.type.h2,
+    fontWeight: '700',
+  },
+  nameSubtitle: {
+    fontSize: Theme.type.body,
+    marginTop: 6,
+    marginBottom: Theme.spacing.md,
+  },
+  nameInput: {
+    borderRadius: Theme.radius.md,
+    borderWidth: 1,
+    backgroundColor: '#2A2A2F',
+    paddingHorizontal: 12,
+    paddingVertical: 10,
+  },
+  nameButton: {
+    marginTop: Theme.spacing.md,
+    height: 48,
+    borderRadius: Theme.radius.md,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  nameButtonText: {
+    fontSize: Theme.type.body,
+    fontWeight: '700',
   },
 });

@@ -152,7 +152,7 @@ export const useZenStore = create<ZenState>()((set, get) => ({
     setBlockedApps: async (apps) => {
         if (!ZenoxEngine.isAvailable()) return;
         try {
-            ZenoxEngine.setBlockedApps(JSON.stringify(apps));
+            await ZenoxEngine.setBlockedApps(JSON.stringify(apps));
             set({ blockedApps: apps });
         } catch (e) {
             console.error('[ZenStore] setBlockedApps failed', e);

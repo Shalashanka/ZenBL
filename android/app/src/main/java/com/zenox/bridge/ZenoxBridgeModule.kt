@@ -4,6 +4,8 @@ import android.content.Intent
 import android.content.Context
 import android.content.pm.ApplicationInfo
 import android.content.pm.PackageManager
+import android.app.usage.UsageEvents
+import android.app.usage.UsageStatsManager
 import android.net.Uri
 import android.provider.Settings
 import android.util.Log
@@ -25,6 +27,9 @@ import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.launch
+import java.text.SimpleDateFormat
+import java.util.Calendar
+import java.util.Locale
 import kotlin.math.max
 
 class ZenoxBridgeModule(
@@ -189,7 +194,7 @@ class ZenoxBridgeModule(
     }
 
     @ReactMethod
-    fun setBlockedApps(json: String) {
+    fun setBlockedApps(json: String, promise: Promise) {
         bridgeScope.launch {
             try {
                 val incoming = mutableMapOf<String, String>()
@@ -222,8 +227,10 @@ class ZenoxBridgeModule(
                 existing.filter { it.packageName !in incoming.keys && it.isBlocked }.forEach { app ->
                     blockedAppDao.upsert(app.copy(isBlocked = false))
                 }
+                promise.resolve(true)
             } catch (exception: Exception) {
                 Log.e(TAG, "setBlockedApps failed", exception)
+                promise.reject("SET_BLOCKED_APPS_FAILED", exception.message, exception)
             }
         }
     }
@@ -360,6 +367,75 @@ class ZenoxBridgeModule(
     }
 
     @ReactMethod
+    fun getWeeklyStats(promise: Promise) {
+        bridgeScope.launch {
+            try {
+                val usageManager = reactApplicationContext
+                    .getSystemService(Context.USAGE_STATS_SERVICE) as UsageStatsManager
+                val blockedPackages = blockedAppDao.getBlockedApps().map { it.packageName }.toSet()
+                val ownPackage = reactApplicationContext.packageName
+                val dayFormat = SimpleDateFormat("EEE", Locale.US)
+                val result = Arguments.createArray()
+
+                for (offset in 6 downTo 0) {
+                    val dayStartCal = Calendar.getInstance().apply {
+                        add(Calendar.DAY_OF_YEAR, -offset)
+                        set(Calendar.HOUR_OF_DAY, 0)
+                        set(Calendar.MINUTE, 0)
+                        set(Calendar.SECOND, 0)
+                        set(Calendar.MILLISECOND, 0)
+                    }
+                    val dayStart = dayStartCal.timeInMillis
+                    val dayEnd = dayStart + 24L * 60L * 60L * 1000L
+
+                    // Proxy metric for "focus minutes": user-app foreground time, excluding this app.
+                    val usageStats = usageManager.queryUsageStats(
+                        UsageStatsManager.INTERVAL_DAILY,
+                        dayStart,
+                        dayEnd,
+                    )
+                    val totalUserForegroundMs = usageStats
+                        .asSequence()
+                        .filter { stat ->
+                            stat.packageName != ownPackage && isUserApp(stat.packageName)
+                        }
+                        .sumOf { it.totalTimeInForeground.coerceAtLeast(0L) }
+                    val minutes = (totalUserForegroundMs / 60000L).toInt()
+
+                    // Attempts: number of blocked-package foreground launches in that day.
+                    var attempts = 0
+                    if (blockedPackages.isNotEmpty()) {
+                        val events = usageManager.queryEvents(dayStart, dayEnd)
+                        val event = UsageEvents.Event()
+                        while (events.hasNextEvent()) {
+                            events.getNextEvent(event)
+                            if (
+                                event.eventType == UsageEvents.Event.MOVE_TO_FOREGROUND &&
+                                blockedPackages.contains(event.packageName)
+                            ) {
+                                attempts++
+                            }
+                        }
+                    }
+
+                    result.pushMap(
+                        Arguments.createMap().apply {
+                            putString("day", dayFormat.format(dayStartCal.time))
+                            putInt("minutes", minutes)
+                            putInt("attempts", attempts)
+                        },
+                    )
+                }
+
+                promise.resolve(result)
+            } catch (exception: Exception) {
+                Log.e(TAG, "getWeeklyStats failed", exception)
+                promise.reject("GET_WEEKLY_STATS_FAILED", exception.message, exception)
+            }
+        }
+    }
+
+    @ReactMethod
     fun toggleAppBlock(packageName: String, appName: String, isBlocked: Boolean) {
         bridgeScope.launch {
             val existing = blockedAppDao.getByPackageName(packageName)
@@ -424,5 +500,14 @@ class ZenoxBridgeModule(
         val safeHour = hour.coerceIn(0, 23)
         val safeMinute = minute.coerceIn(0, 59)
         return "%02d:%02d".format(safeHour, safeMinute)
+    }
+
+    private fun isUserApp(packageName: String): Boolean {
+        return try {
+            val info = reactApplicationContext.packageManager.getApplicationInfo(packageName, 0)
+            (info.flags and ApplicationInfo.FLAG_SYSTEM) == 0
+        } catch (_: Exception) {
+            false
+        }
     }
 }

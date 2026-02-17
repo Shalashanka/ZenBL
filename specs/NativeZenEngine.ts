@@ -14,7 +14,7 @@ export interface Spec extends TurboModule {
     stopZen(): void;
 
     // Blocked Apps CRUD
-    setBlockedApps(json: string): void;
+    setBlockedApps(json: string): Promise<boolean>;
     fetchBlockedApps(): Promise<Object[]>;
 
     // Schedules CRUD
@@ -28,6 +28,13 @@ export interface Spec extends TurboModule {
     checkOverlayPermission(): Promise<boolean>;
     requestOverlayPermission(): void;
     setActiveProfile?(profileJson: string): void;
+    getWeeklyStats?(): Promise<
+        {
+            day: string;
+            minutes: number;
+            attempts: number;
+        }[]
+    >;
 }
 
 const turbo = TurboModuleRegistry.get<Spec>('ZenoxBridge');

@@ -7,6 +7,12 @@ type EngineStatus = {
   isFortress: boolean;
 };
 
+export type WeeklyStat = {
+  day: string;
+  minutes: number;
+  attempts: number;
+};
+
 export type ZenProfilePayload = {
   id: number;
   name: string;
@@ -16,6 +22,8 @@ export type ZenProfilePayload = {
 const engine = NativeZenEngine as (typeof NativeZenEngine & {
   getZenStatus?: () => Promise<{ isActive: boolean; remainingTime: number }>;
   setActiveProfile?: (profileJson: string) => void;
+  startZen?: (durationMs: number) => void;
+  getWeeklyStats?: () => Promise<WeeklyStat[]>;
 }) | null;
 
 export const ZenoxEngine = {
@@ -46,7 +54,15 @@ export const ZenoxEngine = {
 
   startZen(durationSeconds: number, fortressMode = false): void {
     if (!engine) return;
-    engine.triggerManualZen(durationSeconds, fortressMode);
+    try {
+      engine.triggerManualZen(durationSeconds, fortressMode);
+      return;
+    } catch {
+      // Fallback for older native bridge implementations that expose startZen(durationMs).
+      if (engine.startZen) {
+        engine.startZen(durationSeconds * 1000);
+      }
+    }
   },
 
   stopZen(): void {
@@ -63,8 +79,13 @@ export const ZenoxEngine = {
     return engine.fetchBlockedApps();
   },
 
-  setBlockedApps(json: string): void {
-    engine?.setBlockedApps(json);
+  async setBlockedApps(json: string): Promise<boolean> {
+    if (!engine) return false;
+    try {
+      return await engine.setBlockedApps(json);
+    } catch {
+      return false;
+    }
   },
 
   async fetchSchedules(): Promise<object[]> {
@@ -100,9 +121,14 @@ export const ZenoxEngine = {
     engine?.requestOverlayPermission();
   },
 
+  async getWeeklyStats(): Promise<WeeklyStat[]> {
+    if (!engine?.getWeeklyStats) return [];
+    const result = await engine.getWeeklyStats();
+    return Array.isArray(result) ? result : [];
+  },
+
   setActiveProfile(profile: ZenProfilePayload): void {
     if (!engine?.setActiveProfile) return;
     engine.setActiveProfile(JSON.stringify(profile));
   },
 };
-

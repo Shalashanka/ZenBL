@@ -1,10 +1,14 @@
 package com.zenox.engine
 
 import android.app.Service
+import android.app.usage.UsageEvents
+import android.app.usage.UsageStatsManager
 import android.content.Context
 import android.content.Intent
 import android.graphics.Color
 import android.graphics.PixelFormat
+import android.graphics.Typeface
+import android.graphics.drawable.GradientDrawable
 import android.os.Build
 import android.os.Handler
 import android.os.IBinder
@@ -14,9 +18,10 @@ import android.view.Gravity
 import android.view.MotionEvent
 import android.view.View
 import android.view.WindowManager
-import android.widget.Button
 import android.widget.FrameLayout
+import android.widget.LinearLayout
 import android.widget.TextView
+import java.util.Calendar
 
 class ZenoxOverlayService : Service() {
     private var windowManager: WindowManager? = null
@@ -70,25 +75,103 @@ class ZenoxOverlayService : Service() {
     }
 
     private fun createOverlayView(blockedPackageName: String?): View {
+        val appDisplayName = resolveAppDisplayName(blockedPackageName)
+        val blockedAttemptsToday = countBlockedAttemptsToday(blockedPackageName)
+        val quote = pickQuote(appDisplayName)
+
+        val bgColor = Color.parseColor("#1F2A22")
+        val surfaceColor = Color.parseColor("#2A3A2F")
+        val accentColor = Color.parseColor("#2D6A4F")
+        val textColor = Color.parseColor("#F4FFF8")
+        val mutedTextColor = Color.parseColor("#A7C4B6")
+
         val root = FrameLayout(this).apply {
-            setBackgroundColor(Color.BLACK)
+            setBackgroundColor(bgColor)
             isClickable = true
             isFocusable = true
+            @Suppress("DEPRECATION")
+            systemUiVisibility =
+                View.SYSTEM_UI_FLAG_LAYOUT_STABLE or
+                    View.SYSTEM_UI_FLAG_LAYOUT_FULLSCREEN or
+                    View.SYSTEM_UI_FLAG_LAYOUT_HIDE_NAVIGATION
+        }
+
+        val contentCard = LinearLayout(this).apply {
+            orientation = LinearLayout.VERTICAL
+            setPadding(dp(20), dp(20), dp(20), dp(20))
+            background = GradientDrawable().apply {
+                shape = GradientDrawable.RECTANGLE
+                cornerRadius = dp(22).toFloat()
+                setColor(surfaceColor)
+                setStroke(dp(1), Color.parseColor("#33FFFFFF"))
+            }
+        }
+
+        val statusPill = TextView(this).apply {
+            text = "ZEN MODE ACTIVE"
+            setTextColor(textColor)
+            textSize = 11f
+            typeface = Typeface.DEFAULT_BOLD
+            setPadding(dp(10), dp(6), dp(10), dp(6))
+            background = GradientDrawable().apply {
+                shape = GradientDrawable.RECTANGLE
+                cornerRadius = dp(999).toFloat()
+                setColor(accentColor)
+            }
         }
 
         val title = TextView(this).apply {
-            text = if (blockedPackageName.isNullOrBlank()) {
-                "Zenox is Active"
-            } else {
-                "Zenox is Active\n$blockedPackageName is blocked"
-            }
-            setTextColor(Color.WHITE)
-            textSize = 24f
-            gravity = Gravity.CENTER
+            text = "$appDisplayName is blocked"
+            setTextColor(textColor)
+            textSize = 26f
+            typeface = Typeface.DEFAULT_BOLD
+            setPadding(0, dp(14), 0, dp(8))
         }
 
-        val button = Button(this).apply {
+        val subtitle = TextView(this).apply {
+            text = "Stay on your current path. This distraction can wait."
+            setTextColor(mutedTextColor)
+            textSize = 15f
+            setLineSpacing(dp(2).toFloat(), 1.05f)
+        }
+
+        val statsWrap = LinearLayout(this).apply {
+            orientation = LinearLayout.VERTICAL
+            setPadding(dp(14), dp(14), dp(14), dp(14))
+            background = GradientDrawable().apply {
+                shape = GradientDrawable.RECTANGLE
+                cornerRadius = dp(14).toFloat()
+                setColor(Color.parseColor("#1AFFFFFF"))
+            }
+        }
+
+        val attemptsStat = TextView(this).apply {
+            text = "Blocked attempts today: $blockedAttemptsToday"
+            setTextColor(textColor)
+            textSize = 14f
+            typeface = Typeface.DEFAULT_BOLD
+        }
+
+        val quoteText = TextView(this).apply {
+            text = "\"$quote\""
+            setTextColor(mutedTextColor)
+            textSize = 13f
+            setPadding(0, dp(8), 0, 0)
+            setLineSpacing(dp(2).toFloat(), 1.06f)
+        }
+
+        val button = TextView(this).apply {
             text = "Need 5 Minutes?"
+            gravity = Gravity.CENTER
+            setTextColor(textColor)
+            textSize = 16f
+            typeface = Typeface.DEFAULT_BOLD
+            setPadding(dp(16), dp(14), dp(16), dp(14))
+            background = GradientDrawable().apply {
+                shape = GradientDrawable.RECTANGLE
+                cornerRadius = dp(14).toFloat()
+                setColor(accentColor)
+            }
             setOnClickListener {
                 ZenoxManager.requestEmergencyBreak()
                 hideOverlay()
@@ -110,22 +193,40 @@ class ZenoxOverlayService : Service() {
             }
         }
 
+        statsWrap.addView(attemptsStat)
+        statsWrap.addView(quoteText)
+
+        contentCard.addView(statusPill)
+        contentCard.addView(title)
+        contentCard.addView(subtitle)
+        contentCard.addView(
+            statsWrap,
+            LinearLayout.LayoutParams(
+                LinearLayout.LayoutParams.MATCH_PARENT,
+                LinearLayout.LayoutParams.WRAP_CONTENT,
+            ).apply {
+                topMargin = dp(16)
+            },
+        )
+        contentCard.addView(
+            button,
+            LinearLayout.LayoutParams(
+                LinearLayout.LayoutParams.MATCH_PARENT,
+                LinearLayout.LayoutParams.WRAP_CONTENT,
+            ).apply {
+                topMargin = dp(18)
+            },
+        )
+
         root.addView(
-            title,
+            contentCard,
             FrameLayout.LayoutParams(
                 FrameLayout.LayoutParams.MATCH_PARENT,
                 FrameLayout.LayoutParams.WRAP_CONTENT,
                 Gravity.CENTER,
-            ),
-        )
-        root.addView(
-            button,
-            FrameLayout.LayoutParams(
-                FrameLayout.LayoutParams.WRAP_CONTENT,
-                FrameLayout.LayoutParams.WRAP_CONTENT,
-                Gravity.CENTER_HORIZONTAL or Gravity.BOTTOM,
             ).apply {
-                bottomMargin = 160
+                leftMargin = dp(16)
+                rightMargin = dp(16)
             },
         )
         return root
@@ -144,9 +245,15 @@ class ZenoxOverlayService : Service() {
             overlayType,
             WindowManager.LayoutParams.FLAG_NOT_TOUCH_MODAL or
                 WindowManager.LayoutParams.FLAG_LAYOUT_IN_SCREEN or
+                WindowManager.LayoutParams.FLAG_LAYOUT_NO_LIMITS or
                 WindowManager.LayoutParams.FLAG_FULLSCREEN,
             PixelFormat.TRANSLUCENT,
-        )
+        ).apply {
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.P) {
+                layoutInDisplayCutoutMode =
+                    WindowManager.LayoutParams.LAYOUT_IN_DISPLAY_CUTOUT_MODE_SHORT_EDGES
+            }
+        }
     }
 
     private fun hideOverlay() {
@@ -197,5 +304,62 @@ class ZenoxOverlayService : Service() {
         }
 
         fun isOverlayVisible(): Boolean = overlayVisible
+    }
+
+    private fun resolveAppDisplayName(packageName: String?): String {
+        if (packageName.isNullOrBlank()) return "This app"
+        return try {
+            val appInfo = packageManager.getApplicationInfo(packageName, 0)
+            val label = packageManager.getApplicationLabel(appInfo).toString().trim()
+            if (label.isNotBlank()) label else packageName
+        } catch (_: Exception) {
+            packageName
+        }
+    }
+
+    private fun countBlockedAttemptsToday(packageName: String?): Int {
+        if (packageName.isNullOrBlank()) return 0
+        return try {
+            val usageManager = getSystemService(Context.USAGE_STATS_SERVICE) as? UsageStatsManager ?: return 0
+            val dayStart = Calendar.getInstance().apply {
+                set(Calendar.HOUR_OF_DAY, 0)
+                set(Calendar.MINUTE, 0)
+                set(Calendar.SECOND, 0)
+                set(Calendar.MILLISECOND, 0)
+            }.timeInMillis
+            val now = System.currentTimeMillis()
+            val events = usageManager.queryEvents(dayStart, now)
+            val event = UsageEvents.Event()
+            var attempts = 0
+            while (events.hasNextEvent()) {
+                events.getNextEvent(event)
+                if (
+                    event.packageName == packageName &&
+                    event.eventType == UsageEvents.Event.MOVE_TO_FOREGROUND
+                ) {
+                    attempts++
+                }
+            }
+            attempts
+        } catch (exception: Exception) {
+            Log.w(TAG, "Unable to compute blocked attempts for $packageName", exception)
+            0
+        }
+    }
+
+    private fun pickQuote(appName: String): String {
+        val quotes = listOf(
+            "Discipline is choosing what matters most.",
+            "Attention is your most valuable currency.",
+            "Calm focus compounds over time.",
+            "A clear mind creates better work.",
+        )
+        val index = kotlin.math.abs(appName.hashCode()) % quotes.size
+        return quotes[index]
+    }
+
+    private fun dp(value: Int): Int {
+        val density = resources.displayMetrics.density
+        return (value * density).toInt()
     }
 }
