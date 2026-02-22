@@ -29,8 +29,8 @@ export interface Spec extends TurboModule {
     requestOverlayPermission(): void;
 }
 
-const turbo = TurboModuleRegistry.get<Spec>('ZenoxBridge');
+const turbo = TurboModuleRegistry.get<Spec>('ZentoxBridge');
 
-const legacy = (NativeModules as Record<string, Spec | undefined>).ZenoxBridge;
+const legacy = (NativeModules as Record<string, Spec | undefined>).ZentoxBridge;
 
 export default (turbo ?? legacy ?? null) as Spec | null;

@@ -1,61 +1,34 @@
-import React, { useState, useEffect } from 'react';
-import { View } from 'react-native';
-import { Linking } from 'react-native';
-import { Dashboard } from './src/screens/Dashboard';
-import { AppList } from './src/screens/AppList';
-import { ZenBlockScreen } from './src/screens/ZenBlockScreen';
-import { ScheduleScreen } from './src/screens/ScheduleScreen';
-import { GlobalZenOverlay } from './src/components/GlobalZenOverlay';
-
-type Screen = 'dashboard' | 'appList' | 'schedules';
+import React, { useEffect, useState } from 'react';
+import { View, StyleSheet } from 'react-native';
+import { SafeAreaProvider } from 'react-native-safe-area-context';
+import { HomeScreen } from './src/screens/HomeScreen';
+import { BottomNav, TabKey } from './src/components/BottomNav';
+import { log } from './src/utils/logger';
 
 export default function App() {
-  const [currentScreen, setCurrentScreen] = useState<Screen>('dashboard');
-  const [isZenMode, setIsZenMode] = useState(false);
+  const [activeTab, setActiveTab] = useState<TabKey>('dashboard');
 
   useEffect(() => {
-    const handleDeepLink = (event: { url: string }) => {
-      if (event.url && event.url.includes('block')) {
-        setIsZenMode(true);
-      }
-    };
-
-    Linking.getInitialURL().then((url) => {
-      if (url && url.includes('block')) {
-        setIsZenMode(true);
-      }
-    });
-
-    const subscription = Linking.addEventListener('url', handleDeepLink);
-
-    return () => {
-      subscription.remove();
-    };
+    log.info('Zentox App Started Successfully.');
   }, []);
 
-  if (isZenMode) {
-    return <ZenBlockScreen onExit={() => setIsZenMode(false)} />;
-  }
-
-  const renderScreen = () => {
-    if (currentScreen === 'appList') {
-      return <AppList onClose={() => setCurrentScreen('dashboard')} />;
-    }
-    if (currentScreen === 'schedules') {
-      return <ScheduleScreen onClose={() => setCurrentScreen('dashboard')} />;
-    }
-    return (
-      <Dashboard
-        onOpenAppList={() => setCurrentScreen('appList')}
-        onOpenSchedules={() => setCurrentScreen('schedules')}
-      />
-    );
-  };
-
   return (
-    <View style={{ flex: 1 }}>
-      {renderScreen()}
-      <GlobalZenOverlay />
-    </View>
+    <SafeAreaProvider>
+      <View style={styles.container}>
+        {activeTab === 'dashboard' && <HomeScreen />}
+        {activeTab !== 'dashboard' && (
+          <View style={{ flex: 1, backgroundColor: '#F2F2F7' }} />
+        )}
+        <BottomNav activeTab={activeTab} onTabChange={setActiveTab} />
+      </View>
+    </SafeAreaProvider>
   );
 }
+
+const styles = StyleSheet.create({
+  container: {
+    flex: 1,
+    backgroundColor: '#F2F2F7',
+  },
+});
+

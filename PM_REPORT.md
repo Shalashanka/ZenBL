@@ -1,4 +1,4 @@
-# Zenox PM Report
+# Zentox PM Report
 
 ## Date
 February 16, 2026
@@ -10,7 +10,7 @@ The project direction changed during development:
 - To stabilize delivery, we copied the working native Android folder into the first repo who had expo already so we could keep the Expo UI while preserving the native code that already worked.
 
 ## What Was Done
-- Kept the new working native implementation under `android/app/src/main/java/com/zenox/engine`.
+- Kept the new working native implementation under `android/app/src/main/java/com/zentox/engine`.
 - Restored UI resources (icons, splash, theme, colors, strings, drawables, mipmaps, xml) into active `android/app/src/main/res`.
 - Updated `AndroidManifest.xml` to use the working engine classes with fully qualified names while preserving UI/theme/splash wiring.
 - Fixed `MainActivity` React root component to `main` so Expo/React Native UI mounts correctly.
